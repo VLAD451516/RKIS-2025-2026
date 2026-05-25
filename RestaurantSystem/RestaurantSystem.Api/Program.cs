@@ -80,7 +80,7 @@ builder.Services.AddCors(options =>
         builder.WithOrigins("http://localhost:5173")
                .AllowAnyMethod()
                .AllowAnyHeader()
-               .ExposedHeaders("X-Total-Count")
+               .WithExposedHeaders("X-Total-Count")
                .AllowCredentials();
     });
 });
