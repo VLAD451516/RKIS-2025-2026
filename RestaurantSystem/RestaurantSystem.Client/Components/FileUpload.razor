@@ -1,0 +1,48 @@
+@using System.Net.Http.Headers
+@using RestaurantSystem.Client.Services
+@inject ApiService ApiService
+
+<div class="mb-3">
+    <label class="form-label">@Label</label>
+    <InputFile OnChange="OnInputFileChange" class="form-control" />
+    @if (isUploading)
+    {
+        <div class="spinner-border spinner-border-sm mt-2"></div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "Upload Image";
+    [Parameter] public EventCallback<string> OnUploadSuccess { get; set; }
+    private bool isUploading;
+
+    private async Task OnInputFileChange(InputFileChangeEventArgs e)
+    {
+        isUploading = true;
+        try
+        {
+            var file = e.File;
+            if (file != null)
+            {
+                var content = new MultipartFormDataContent();
+                var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024));
+                fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
+                content.Add(fileContent, "file", file.Name);
+
+                var fileName = await ApiService.UploadFileAsync(content);
+                if (!string.IsNullOrEmpty(fileName))
+                {
+                    await OnUploadSuccess.InvokeAsync(fileName);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isUploading = false;
+        }
+    }
+}

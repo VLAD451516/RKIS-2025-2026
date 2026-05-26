@@ -1,0 +1,77 @@
+@page "/"
+@using RestaurantSystem.Client.Services
+@using RestaurantSystem.Shared.Dtos
+@inject ApiService ApiService
+
+<div class="container mt-4">
+    <h3>Restaurants</h3>
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <input @bind="searchTerm" @bind:event="oninput" @onkeyup="HandleSearch" class="form-control" placeholder="Search..." />
+        </div>
+    </div>
+
+    @if (restaurants == null)
+    {
+        <div class="spinner-border"></div>
+    }
+    else
+    {
+        <div class="row">
+            @foreach (var r in restaurants.Items)
+            {
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100 shadow-sm">
+                        @if (!string.IsNullOrEmpty(r.ImagePath))
+                        {
+                            <img src="http://localhost:5000/api/files/@r.ImagePath" class="card-img-top" style="height: 200px; object-fit: cover;">
+                        }
+                        <div class="card-body">
+                            <h5 class="card-title">@r.Name</h5>
+                            <p class="card-text">@r.Description</p>
+                            <p class="card-text text-muted"><small>@r.Address</small></p>
+                            <a href="/restaurant/@r.Id" class="btn btn-outline-primary">View Menu</a>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <nav>
+            <ul class="pagination">
+                @for (int i = 1; i <= Math.Ceiling((double)restaurants.TotalCount / restaurants.PageSize); i++)
+                {
+                    var pageNum = i;
+                    <li class="page-item @(pageNum == currentPage ? "active" : "")">
+                        <button class="page-link" @onclick="() => ChangePage(pageNum)">@pageNum</button>
+                    </li>
+                }
+            </ul>
+        </nav>
+    }
+</div>
+
+@code {
+    private PagedResult<RestaurantDto>? restaurants;
+    private int currentPage = 1;
+    private string searchTerm = "";
+
+    protected override async Task OnInitializedAsync() => await LoadRestaurants();
+
+    private async Task LoadRestaurants()
+    {
+        restaurants = await ApiService.GetRestaurantsAsync(currentPage, searchTerm);
+    }
+
+    private async Task ChangePage(int page)
+    {
+        currentPage = page;
+        await LoadRestaurants();
+    }
+
+    private async Task HandleSearch()
+    {
+        currentPage = 1;
+        await LoadRestaurants();
+    }
+}

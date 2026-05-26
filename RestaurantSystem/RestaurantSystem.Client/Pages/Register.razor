@@ -1,0 +1,59 @@
+@page "/register"
+@using RestaurantSystem.Client.Services
+@using RestaurantSystem.Shared.Dtos
+@inject ApiService ApiService
+@inject NavigationManager NavManager
+
+<div class="row justify-content-center mt-5">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">Register</div>
+            <div class="card-body">
+                @if (!string.IsNullOrEmpty(error))
+                {
+                    <div class="alert alert-danger">@error</div>
+                }
+                <EditForm Model="registerRequest" OnValidSubmit="HandleRegister">
+                    <DataAnnotationsValidator />
+                    <div class="mb-3">
+                        <label>Username</label>
+                        <InputText @bind-Value="registerRequest.Username" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                        <label>Password</label>
+                        <InputText @bind-Value="registerRequest.Password" type="password" class="form-control" />
+                    </div>
+                    <button type="submit" class="btn btn-success w-100" disabled="@loading">
+                        @if (loading)
+                        {
+                            <span class="spinner-border spinner-border-sm"></span>
+                        }
+                        Register
+                    </button>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private RegisterRequest registerRequest = new();
+    private string? error;
+    private bool loading;
+
+    private async Task HandleRegister()
+    {
+        loading = true;
+        error = null;
+        var result = await ApiService.RegisterAsync(registerRequest);
+        if (result != null)
+        {
+            NavManager.NavigateTo("/login");
+        }
+        else
+        {
+            error = "Registration failed";
+        }
+        loading = false;
+    }
+}

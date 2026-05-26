@@ -1,0 +1,65 @@
+@page "/login"
+@using RestaurantSystem.Client.Auth
+@using RestaurantSystem.Client.Services
+@using RestaurantSystem.Shared.Dtos
+@using Blazored.LocalStorage
+@inject ApiService ApiService
+@inject ILocalStorageService LocalStorage
+@inject CustomAuthStateProvider AuthStateProvider
+@inject NavigationManager NavManager
+
+<div class="row justify-content-center mt-5">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">Login</div>
+            <div class="card-body">
+                @if (!string.IsNullOrEmpty(error))
+                {
+                    <div class="alert alert-danger">@error</div>
+                }
+                <EditForm Model="loginRequest" OnValidSubmit="HandleLogin">
+                    <DataAnnotationsValidator />
+                    <div class="mb-3">
+                        <label>Username</label>
+                        <InputText @bind-Value="loginRequest.Username" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                        <label>Password</label>
+                        <InputText @bind-Value="loginRequest.Password" type="password" class="form-control" />
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100" disabled="@loading">
+                        @if (loading)
+                        {
+                            <span class="spinner-border spinner-border-sm"></span>
+                        }
+                        Login
+                    </button>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginRequest loginRequest = new();
+    private string? error;
+    private bool loading;
+
+    private async Task HandleLogin()
+    {
+        loading = true;
+        error = null;
+        var result = await ApiService.LoginAsync(loginRequest);
+        if (result != null)
+        {
+            await LocalStorage.SetItemAsync("authToken", result.Token);
+            AuthStateProvider.NotifyUserAuthentication(result.Token);
+            NavManager.NavigateTo("/");
+        }
+        else
+        {
+            error = "Invalid credentials";
+        }
+        loading = false;
+    }
+}
