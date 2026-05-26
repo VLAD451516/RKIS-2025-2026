@@ -11,15 +11,15 @@
         <div class="top-row px-4">
             <AuthorizeView>
                 <Authorized>
-                    <span>Hello, @context.User.Identity?.Name!</span>
-                    <a href="logout" class="ms-3">Logout</a>
+                    <span>Привет, @context.User.Identity?.Name!</span>
+                    <a href="logout" class="ms-3">Выйти</a>
                 </Authorized>
                 <NotAuthorized>
-                    <a href="login">Login</a>
-                    <a href="register" class="ms-3">Register</a>
+                    <a href="login">Вход</a>
+                    <a href="register" class="ms-3">Регистрация</a>
                 </NotAuthorized>
             </AuthorizeView>
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">О программе</a>
         </div>
 
         <article class="content px-4">
@@ -31,7 +31,7 @@
 <NotificationSystem />
 
 <div id="blazor-error-ui">
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
+    Произошла непредвиденная ошибка.
+    <a href="." class="reload">Обновить</a>
     <span class="dismiss">🗙</span>
 </div>

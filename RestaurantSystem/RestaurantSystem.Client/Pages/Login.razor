@@ -11,7 +11,7 @@
 <div class="row justify-content-center mt-5">
     <div class="col-md-4">
         <div class="card">
-            <div class="card-header">Login</div>
+            <div class="card-header">Вход</div>
             <div class="card-body">
                 @if (!string.IsNullOrEmpty(error))
                 {
@@ -20,11 +20,11 @@
                 <EditForm Model="loginRequest" OnValidSubmit="HandleLogin">
                     <DataAnnotationsValidator />
                     <div class="mb-3">
-                        <label>Username</label>
+                        <label>Имя пользователя</label>
                         <InputText @bind-Value="loginRequest.Username" class="form-control" />
                     </div>
                     <div class="mb-3">
-                        <label>Password</label>
+                        <label>Пароль</label>
                         <InputText @bind-Value="loginRequest.Password" type="password" class="form-control" />
                     </div>
                     <button type="submit" class="btn btn-primary w-100" disabled="@loading">
@@ -32,7 +32,7 @@
                         {
                             <span class="spinner-border spinner-border-sm"></span>
                         }
-                        Login
+                        Войти
                     </button>
                 </EditForm>
             </div>
@@ -49,17 +49,23 @@
     {
         loading = true;
         error = null;
-        var result = await ApiService.LoginAsync(loginRequest);
-        if (result != null)
+        try
         {
-            await LocalStorage.SetItemAsync("authToken", result.Token);
-            AuthStateProvider.NotifyUserAuthentication(result.Token);
-            NavManager.NavigateTo("/");
+            var result = await ApiService.LoginAsync(loginRequest);
+            if (result != null)
+            {
+                await LocalStorage.SetItemAsync("authToken", result.Token);
+                AuthStateProvider.NotifyUserAuthentication(result.Token);
+                NavManager.NavigateTo("/");
+            }
         }
-        else
+        catch (Exception ex)
         {
-            error = "Invalid credentials";
+            error = ex.Message;
         }
-        loading = false;
+        finally
+        {
+            loading = false;
+        }
     }
 }

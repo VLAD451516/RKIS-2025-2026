@@ -4,10 +4,10 @@
 @inject ApiService ApiService
 
 <div class="container mt-4">
-    <h3>Restaurants</h3>
+    <h3>Рестораны</h3>
     <div class="row mb-3">
         <div class="col-md-6">
-            <input @bind="searchTerm" @bind:event="oninput" @onkeyup="HandleSearch" class="form-control" placeholder="Search..." />
+            <input @bind="searchTerm" @bind:event="oninput" @onkeyup="HandleSearch" class="form-control" placeholder="Поиск..." />
         </div>
     </div>
 
@@ -30,7 +30,7 @@
                             <h5 class="card-title">@r.Name</h5>
                             <p class="card-text">@r.Description</p>
                             <p class="card-text text-muted"><small>@r.Address</small></p>
-                            <a href="/restaurant/@r.Id" class="btn btn-outline-primary">View Menu</a>
+                            <a href="/restaurant/@r.Id" class="btn btn-outline-primary">Меню</a>
                         </div>
                     </div>
                 </div>

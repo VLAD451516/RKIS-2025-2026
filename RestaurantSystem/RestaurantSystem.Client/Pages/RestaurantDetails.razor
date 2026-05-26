@@ -18,18 +18,18 @@
             <div class="card-body">
                 <h2 class="card-title">@restaurant.Name</h2>
                 <p class="lead">@restaurant.Description</p>
-                <p><strong>Address:</strong> @restaurant.Address</p>
+                <p><strong>Адрес:</strong> @restaurant.Address</p>
             </div>
         </div>
 
-        <h4>Menu</h4>
+        <h4>Меню</h4>
         @if (menuItems == null)
         {
-            <p>Loading menu...</p>
+            <p>Загрузка меню...</p>
         }
         else if (!menuItems.Any())
         {
-            <p>No menu items available.</p>
+            <p>В меню пока ничего нет.</p>
         }
         else
         {
@@ -49,7 +49,7 @@
                                     <div class="card-body">
                                         <h5 class="card-title">@item.Name</h5>
                                         <p class="card-text">@item.Description</p>
-                                        <p class="card-text"><strong>$@item.Price</strong></p>
+                                        <p class="card-text"><strong>@item.Price ₽</strong></p>
                                     </div>
                                 </div>
                             </div>

@@ -32,7 +32,7 @@ namespace RestaurantSystem.API.Controllers
         public IActionResult Get(string fileName)
         {
             var filePath = _fileService.GetFilePath(fileName);
-            if (!System.IO.File.Exists(filePath)) return NotFound();
+            if (!System.IO.File.Exists(filePath)) return NotFound("Файл не найден");
 
             var extension = Path.GetExtension(fileName).ToLower();
             var contentType = extension switch

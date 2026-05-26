@@ -24,7 +24,7 @@ namespace RestaurantSystem.API.Controllers
         public async Task<ActionResult<AuthResponse>> Register(RegisterRequest request)
         {
             if (await _userRepo.GetQueryable().AnyAsync(u => u.Username == request.Username))
-                return BadRequest("Username already exists");
+                return BadRequest("Имя пользователя уже занято");
 
             var user = new AppUser
             {
@@ -48,7 +48,7 @@ namespace RestaurantSystem.API.Controllers
             var user = await _userRepo.GetQueryable().FirstOrDefaultAsync(u => u.Username == request.Username);
 
             if (user == null || !_authService.VerifyPassword(user.PasswordHash, request.Password))
-                return Unauthorized("Invalid username or password");
+                return Unauthorized("Неверное имя пользователя или пароль");
 
             return new AuthResponse
             {

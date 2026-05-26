@@ -24,11 +24,11 @@ namespace RestaurantSystem.API.Services
 
         public async Task<string> SaveFileAsync(IFormFile file)
         {
-            if (file.Length > 5 * 1024 * 1024) throw new Exception("File too large (max 5MB)");
+            if (file.Length > 5 * 1024 * 1024) throw new Exception("Файл слишком большой (макс. 5МБ)");
 
             var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp" };
             var extension = Path.GetExtension(file.FileName).ToLower();
-            if (!allowedExtensions.Contains(extension)) throw new Exception("Invalid file type");
+            if (!allowedExtensions.Contains(extension)) throw new Exception("Неверный тип файла");
 
             var fileName = Guid.NewGuid().ToString() + extension;
             var filePath = Path.Combine(_uploadsFolder, fileName);
