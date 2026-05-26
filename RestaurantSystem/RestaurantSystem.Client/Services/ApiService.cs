@@ -7,12 +7,10 @@ namespace RestaurantSystem.Client.Services
     public class ApiService
     {
         private readonly HttpClient _http;
-        private readonly AuthenticationStateProvider _authStateProvider;
 
-        public ApiService(HttpClient http, AuthenticationStateProvider authStateProvider)
+        public ApiService(HttpClient http)
         {
             _http = http;
-            _authStateProvider = authStateProvider;
         }
 
         private async Task HandleResponse(HttpResponseMessage response)
@@ -58,6 +56,61 @@ namespace RestaurantSystem.Client.Services
             var response = await _http.PostAsync("api/files/upload", content);
             await HandleResponse(response);
             return await response.Content.ReadAsStringAsync();
+        }
+
+        public async Task CreateRestaurantWithMenuAsync(CreateRestaurantWithMenuDto dto)
+        {
+            var response = await _http.PostAsJsonAsync("api/restaurants/with-menu", dto);
+            await HandleResponse(response);
+        }
+
+        public async Task<List<RestaurantDto>?> GetUserFavoritesAsync()
+        {
+            return await _http.GetFromJsonAsync<List<RestaurantDto>>("api/favorites");
+        }
+
+        public async Task AddToFavoritesAsync(int restaurantId)
+        {
+            var response = await _http.PostAsync($"api/favorites/{restaurantId}", null);
+            await HandleResponse(response);
+        }
+
+        public async Task RemoveFromFavoritesAsync(int restaurantId)
+        {
+            var response = await _http.DeleteAsync($"api/favorites/{restaurantId}");
+            await HandleResponse(response);
+        }
+
+        public async Task<ProfileDto?> GetProfileAsync()
+        {
+            return await _http.GetFromJsonAsync<ProfileDto>("api/profile");
+        }
+
+        public async Task UpdateProfileAsync(UpdateProfileDto dto)
+        {
+            var response = await _http.PutAsJsonAsync("api/profile", dto);
+            await HandleResponse(response);
+        }
+
+        public async Task ChangePasswordAsync(ChangePasswordDto dto)
+        {
+            var response = await _http.PostAsJsonAsync("api/profile/change-password", dto);
+            await HandleResponse(response);
+        }
+
+        public async Task<UserStatsDto?> GetUserStatsAsync()
+        {
+            return await _http.GetFromJsonAsync<UserStatsDto>("api/profile/stats");
+        }
+
+        public async Task<List<RestaurantDto>?> GetMyRestaurantsAsync()
+        {
+            return await _http.GetFromJsonAsync<List<RestaurantDto>>("api/restaurants/my");
+        }
+
+        public async Task<List<RestaurantMapDto>?> GetRestaurantsForMapAsync()
+        {
+            return await _http.GetFromJsonAsync<List<RestaurantMapDto>>("api/restaurants/map");
         }
     }
 }

@@ -12,6 +12,7 @@ namespace RestaurantSystem.API.Data
         public DbSet<AppUser> Users { get; set; }
         public DbSet<Restaurant> Restaurants { get; set; }
         public DbSet<MenuItem> MenuItems { get; set; }
+        public DbSet<Favorite> Favorites { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -21,6 +22,10 @@ namespace RestaurantSystem.API.Data
                 .HasMany(r => r.MenuItems)
                 .WithOne()
                 .HasForeignKey(m => m.RestaurantId);
+
+            modelBuilder.Entity<Favorite>()
+                .HasIndex(f => new { f.UserId, f.RestaurantId })
+                .IsUnique();
         }
     }
 }

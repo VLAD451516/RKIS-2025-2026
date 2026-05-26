@@ -23,22 +23,35 @@ namespace RestaurantSystem.API.Controllers
         [HttpPost("register")]
         public async Task<ActionResult<AuthResponse>> Register(RegisterRequest request)
         {
+            if (request.Password != request.ConfirmPassword)
+                return BadRequest("Пароли не совпадают");
+
             if (await _userRepo.GetQueryable().AnyAsync(u => u.Username == request.Username))
                 return BadRequest("Имя пользователя уже занято");
 
             var user = new AppUser
             {
                 Username = request.Username,
-                PasswordHash = _authService.HashPassword(request.Password)
+                FullName = request.FullName,
+                PasswordHash = _authService.HashPassword(request.Password),
+                RegistrationDate = DateTime.UtcNow
             };
 
             await _userRepo.AddAsync(user);
             await _userRepo.SaveChangesAsync();
 
+            var profile = new ProfileDto
+            {
+                Username = user.Username,
+                FullName = user.FullName,
+                RegistrationDate = user.RegistrationDate
+            };
+
             return new AuthResponse
             {
                 Token = _authService.CreateToken(user),
-                Username = user.Username
+                Username = user.Username,
+                Profile = profile
             };
         }
 
@@ -50,10 +63,20 @@ namespace RestaurantSystem.API.Controllers
             if (user == null || !_authService.VerifyPassword(user.PasswordHash, request.Password))
                 return Unauthorized("Неверное имя пользователя или пароль");
 
+            var profile = new ProfileDto
+            {
+                Username = user.Username,
+                FullName = user.FullName,
+                AvatarPath = user.AvatarPath,
+                Bio = user.Bio,
+                RegistrationDate = user.RegistrationDate
+            };
+
             return new AuthResponse
             {
                 Token = _authService.CreateToken(user),
-                Username = user.Username
+                Username = user.Username,
+                Profile = profile
             };
         }
     }

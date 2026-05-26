@@ -1,0 +1,140 @@
+@page "/profile"
+@using Microsoft.AspNetCore.Authorization
+@using RestaurantSystem.Client.Components
+@using RestaurantSystem.Client.Services
+@using RestaurantSystem.Shared.Dtos
+@attribute [Authorize]
+@inject ApiService ApiService
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body text-center">
+                    @if (!string.IsNullOrEmpty(profile?.AvatarPath))
+                    {
+                        <img src="http://localhost:5000/api/files/@profile.AvatarPath" class="rounded-circle mb-3" style="width: 150px; height: 150px; object-fit: cover;">
+                    }
+                    else
+                    {
+                        <div class="bg-secondary rounded-circle mb-3 mx-auto d-flex align-items-center justify-content-center text-white" style="width: 150px; height: 150px; font-size: 3rem;">
+                            @profile?.Username.Substring(0, 1).ToUpper()
+                        </div>
+                    }
+                    <h4>@profile?.FullName</h4>
+                    <p class="text-muted">@@@profile?.Username</p>
+                    <p>@profile?.Bio</p>
+
+                    <button class="btn btn-outline-primary btn-sm mb-2" @onclick="() => showEditModal = true">Редактировать профиль</button>
+                    <button class="btn btn-outline-danger btn-sm" @onclick="() => showPasswordModal = true">Сменить пароль</button>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Статистика</h5>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Мои рестораны
+                            <span class="badge bg-primary rounded-pill">@stats?.RestaurantCount</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Избранное
+                            <span class="badge bg-danger rounded-pill">@stats?.FavoriteCount</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <h4 class="mb-4">Мои рестораны</h4>
+            @if (myRestaurants == null)
+            {
+                <div class="spinner-border"></div>
+            }
+            else if (!myRestaurants.Any())
+            {
+                <p>Вы еще не создали ни одного ресторана.</p>
+                <a href="/add-restaurant" class="btn btn-primary">Добавить первый ресторан</a>
+            }
+            else
+            {
+                <div class="row">
+                    @foreach (var r in myRestaurants)
+                    {
+                        <div class="col-md-6 mb-3">
+                            <div class="card h-100 shadow-sm">
+                                <div class="card-body">
+                                    <h5 class="card-title">@r.Name</h5>
+                                    <p class="card-text text-truncate">@r.Description</p>
+                                    <a href="/restaurant/@r.Id" class="btn btn-sm btn-outline-primary">Просмотр</a>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@if (showPasswordModal)
+{
+    <div class="modal show d-block" style="background: rgba(0,0,0,0.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Смена пароля</h5>
+                    <button type="button" class="btn-close" @onclick="() => showPasswordModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(pwdError)) { <div class="alert alert-danger">@pwdError</div> }
+                    <div class="mb-3">
+                        <label>Старый пароль</label>
+                        <input type="password" class="form-control" @bind="pwdModel.OldPassword" />
+                    </div>
+                    <div class="mb-3">
+                        <label>Новый пароль</label>
+                        <input type="password" class="form-control" @bind="pwdModel.NewPassword" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => showPasswordModal = false">Отмена</button>
+                    <button class="btn btn-primary" @onclick="HandleChangePassword">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private ProfileDto? profile;
+    private UserStatsDto? stats;
+    private List<RestaurantDto>? myRestaurants;
+    private bool showEditModal;
+    private bool showPasswordModal;
+    private ChangePasswordDto pwdModel = new();
+    private string? pwdError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        profile = await ApiService.GetProfileAsync();
+        stats = await ApiService.GetUserStatsAsync();
+        myRestaurants = await ApiService.GetMyRestaurantsAsync();
+    }
+
+    private async Task HandleChangePassword()
+    {
+        try
+        {
+            await ApiService.ChangePasswordAsync(pwdModel);
+            showPasswordModal = false;
+            pwdModel = new();
+        }
+        catch (Exception ex)
+        {
+            pwdError = ex.Message;
+        }
+    }
+}

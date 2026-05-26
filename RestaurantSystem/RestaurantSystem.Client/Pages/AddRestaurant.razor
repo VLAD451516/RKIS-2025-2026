@@ -1,0 +1,116 @@
+@page "/add-restaurant"
+@using Microsoft.AspNetCore.Authorization
+@using RestaurantSystem.Client.Components
+@using RestaurantSystem.Client.Services
+@using RestaurantSystem.Shared.Dtos
+@attribute [Authorize]
+@inject ApiService ApiService
+@inject NavigationManager NavManager
+
+<div class="container mt-4">
+    <h3>Добавить ресторан</h3>
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="alert alert-danger">@error</div>
+    }
+
+    <EditForm Model="model" OnValidSubmit="HandleSubmit">
+        <DataAnnotationsValidator />
+
+        <div class="card mb-4">
+            <div class="card-header">Основная информация</div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label>Название</label>
+                    <InputText @bind-Value="model.Restaurant.Name" class="form-control" />
+                </div>
+                <div class="mb-3">
+                    <label>Описание</label>
+                    <InputTextArea @bind-Value="model.Restaurant.Description" class="form-control" />
+                </div>
+                <div class="mb-3">
+                    <label>Адрес</label>
+                    <InputText @bind-Value="model.Restaurant.Address" class="form-control" />
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label>Широта</label>
+                        <InputNumber @bind-Value="model.Restaurant.Latitude" class="form-control" />
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label>Долгота</label>
+                        <InputNumber @bind-Value="model.Restaurant.Longitude" class="form-control" />
+                    </div>
+                </div>
+                <FileUpload Label="Изображение ресторана" OnUploadSuccess="@(path => model.Restaurant.ImagePath = path)" />
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                Меню
+                <button type="button" class="btn btn-sm btn-outline-success" @onclick="AddMenuItem">Добавить блюдо</button>
+            </div>
+            <div class="card-body">
+                @for (int i = 0; i < model.MenuItems.Count; i++)
+                {
+                    var index = i;
+                    <div class="border p-3 mb-3">
+                        <div class="d-flex justify-content-between">
+                            <h5>Блюдо #@(index + 1)</h5>
+                            <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => RemoveMenuItem(index)">Удалить</button>
+                        </div>
+                        <div class="mb-2">
+                            <label>Название</label>
+                            <InputText @bind-Value="model.MenuItems[index].Name" class="form-control" />
+                        </div>
+                        <div class="mb-2">
+                            <label>Цена</label>
+                            <InputNumber @bind-Value="model.MenuItems[index].Price" class="form-control" />
+                        </div>
+                        <div class="mb-2">
+                            <label>Описание</label>
+                            <InputTextArea @bind-Value="model.MenuItems[index].Description" class="form-control" />
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100 mb-5" disabled="@loading">
+            @if (loading)
+            {
+                <span class="spinner-border spinner-border-sm"></span>
+            }
+            Сохранить ресторан
+        </button>
+    </EditForm>
+</div>
+
+@code {
+    private CreateRestaurantWithMenuDto model = new();
+    private string? error;
+    private bool loading;
+
+    private void AddMenuItem() => model.MenuItems.Add(new MenuItemDto());
+    private void RemoveMenuItem(int index) => model.MenuItems.RemoveAt(index);
+
+    private async Task HandleSubmit()
+    {
+        loading = true;
+        try
+        {
+            await ApiService.CreateRestaurantWithMenuAsync(model);
+            NavManager.NavigateTo("/");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}
