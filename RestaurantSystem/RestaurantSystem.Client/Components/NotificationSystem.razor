@@ -1,0 +1,65 @@
+@implements IDisposable
+@using Microsoft.AspNetCore.SignalR.Client
+@using RestaurantSystem.Client.Auth
+@inject NavigationManager NavManager
+@inject CustomAuthStateProvider AuthStateProvider
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    @foreach (var toast in toasts)
+    {
+        <div class="toast show @toast.CssClass" role="alert">
+            <div class="toast-header">
+                <strong class="me-auto">@toast.Title</strong>
+                <button type="button" class="btn-close" @onclick="() => RemoveToast(toast)"></button>
+            </div>
+            <div class="card-body">
+                @toast.Message
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<ToastModel> toasts = new();
+    private HubConnection? hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl("http://localhost:5000/notificationHub")
+            .Build();
+
+        hubConnection.On<string, string>("ReceiveMessage", (user, message) =>
+        {
+            AddToast("Notification", $"{user}: {message}", "bg-info");
+            InvokeAsync(StateHasChanged);
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    public void AddToast(string title, string message, string cssClass = "bg-light")
+    {
+        var toast = new ToastModel { Title = title, Message = message, CssClass = cssClass };
+        toasts.Add(toast);
+        Task.Delay(5000).ContinueWith(_ => RemoveToast(toast));
+    }
+
+    private void RemoveToast(ToastModel toast)
+    {
+        toasts.Remove(toast);
+        InvokeAsync(StateHasChanged);
+    }
+
+    public async void Dispose()
+    {
+        if (hubConnection is not null) await hubConnection.DisposeAsync();
+    }
+
+    private class ToastModel
+    {
+        public string Title { get; set; } = "";
+        public string Message { get; set; } = "";
+        public string CssClass { get; set; } = "";
+    }
+}

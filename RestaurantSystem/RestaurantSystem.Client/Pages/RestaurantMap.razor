@@ -1,0 +1,39 @@
+@page "/restaurants-map"
+@using RestaurantSystem.Client.Services
+@using RestaurantSystem.Shared.Dtos
+@inject ApiService ApiService
+@inject IJSRuntime JSRuntime
+
+<div class="container mt-4">
+    <h3>Карта ресторанов</h3>
+    <div id="map" style="height: 600px; width: 100%; border-radius: 8px;" class="shadow-sm"></div>
+</div>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("leafletBridge.init", 44.7239, 37.7690, 13);
+            var restaurants = await ApiService.GetRestaurantsForMapAsync();
+            if (restaurants != null)
+            {
+                foreach (var r in restaurants)
+                {
+                    if (r.Latitude != 0 && r.Longitude != 0)
+                    {
+                        var popup = $@"
+                            <div>
+                                <h5>{r.Name}</h5>
+                                <p>{r.Address}</p>
+                                <p><b>Тел:</b> <a href='tel:{r.PhoneNumber}'>{r.PhoneNumber}</a></p>
+                                <p><b>Часы:</b> {r.OpeningHours}</p>
+                                <a href='/restaurant/{r.Id}' class='btn btn-primary btn-sm text-white'>Подробнее</a>
+                            </div>";
+                        await JSRuntime.InvokeVoidAsync("leafletBridge.addMarker", r.Latitude, r.Longitude, popup);
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,82 @@
+@page "/login"
+@using RestaurantSystem.Client.Auth
+@using RestaurantSystem.Client.Services
+@using RestaurantSystem.Shared.Dtos
+@using Blazored.LocalStorage
+@inject ApiService ApiService
+@inject ILocalStorageService LocalStorage
+@inject CustomAuthStateProvider AuthStateProvider
+@inject NavigationManager NavManager
+
+<div class="row justify-content-center mt-5">
+    <div class="col-md-4">
+        <div class="card shadow border-0">
+            <div class="card-header bg-primary text-white text-center py-3">
+                <h4 class="mb-0">Добро пожаловать</h4>
+            </div>
+            <div class="card-body p-4">
+                @if (!string.IsNullOrEmpty(error))
+                {
+                    <div class="alert alert-danger">@error</div>
+                }
+                <EditForm Model="loginRequest" OnValidSubmit="HandleLogin">
+                    <DataAnnotationsValidator />
+                    <div class="mb-3">
+                        <label class="form-label">Имя пользователя</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person"></i></span>
+                            <InputText @bind-Value="loginRequest.Username" class="form-control" placeholder="username" />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Пароль</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                            <InputText @bind-Value="loginRequest.Password" type="password" class="form-control" />
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 py-2" disabled="@loading">
+                        @if (loading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Войти
+                    </button>
+                </EditForm>
+                <div class="text-center mt-3">
+                    Нет аккаунта? <a href="/register">Зарегистрироваться</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginRequest loginRequest = new();
+    private string? error;
+    private bool loading;
+
+    private async Task HandleLogin()
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            var result = await ApiService.LoginAsync(loginRequest);
+            if (result != null)
+            {
+                await LocalStorage.SetItemAsync("authToken", result.Token);
+                AuthStateProvider.NotifyUserAuthentication(result.Token);
+                NavManager.NavigateTo("/");
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

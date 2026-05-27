@@ -1,0 +1,108 @@
+@page "/"
+@using RestaurantSystem.Client.Services
+@using RestaurantSystem.Shared.Dtos
+@using Microsoft.AspNetCore.Components.Authorization
+@inject ApiService ApiService
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3>Рестораны</h3>
+        <AuthorizeView>
+            <Authorized>
+                <a href="/add-restaurant" class="btn btn-primary">Добавить ресторан</a>
+            </Authorized>
+        </AuthorizeView>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <input @bind="searchTerm" @bind:event="oninput" @onkeyup="HandleSearch" class="form-control" placeholder="Поиск..." />
+        </div>
+    </div>
+
+    @if (restaurants == null)
+    {
+        <div class="spinner-border"></div>
+    }
+    else
+    {
+        <div class="row">
+            @foreach (var r in restaurants.Items)
+            {
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100 shadow-sm position-relative">
+                        <AuthorizeView>
+                            <Authorized>
+                                <button class="btn btn-link position-absolute top-0 end-0 p-2" style="z-index: 10;" @onclick="() => ToggleFavorite(r)">
+                                    <i class="bi @(r.IsFavorite ? "bi-heart-fill text-danger" : "bi-heart text-white")" style="font-size: 1.5rem; text-shadow: 0 0 3px #000;"></i>
+                                </button>
+                            </Authorized>
+                        </AuthorizeView>
+
+                        @if (!string.IsNullOrEmpty(r.ImagePath))
+                        {
+                            <img src="http://localhost:5000/api/files/@r.ImagePath" class="card-img-top" style="height: 200px; object-fit: cover;">
+                        }
+                        <div class="card-body">
+                            <h5 class="card-title">@r.Name</h5>
+                            <p class="card-text text-truncate">@r.Description</p>
+                            <p class="card-text text-muted"><small>@r.Address</small></p>
+                            <a href="/restaurant/@r.Id" class="btn btn-outline-primary">Меню</a>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <nav>
+            <ul class="pagination">
+                @for (int i = 1; i <= Math.Ceiling((double)restaurants.TotalCount / restaurants.PageSize); i++)
+                {
+                    var pageNum = i;
+                    <li class="page-item @(pageNum == currentPage ? "active" : "")">
+                        <button class="page-link" @onclick="() => ChangePage(pageNum)">@pageNum</button>
+                    </li>
+                }
+            </ul>
+        </nav>
+    }
+</div>
+
+@code {
+    private PagedResult<RestaurantDto>? restaurants;
+    private int currentPage = 1;
+    private string searchTerm = "";
+
+    protected override async Task OnInitializedAsync() => await LoadRestaurants();
+
+    private async Task LoadRestaurants()
+    {
+        restaurants = await ApiService.GetRestaurantsAsync(currentPage, searchTerm);
+    }
+
+    private async Task ChangePage(int page)
+    {
+        currentPage = page;
+        await LoadRestaurants();
+    }
+
+    private async Task HandleSearch()
+    {
+        currentPage = 1;
+        await LoadRestaurants();
+    }
+
+    private async Task ToggleFavorite(RestaurantDto restaurant)
+    {
+        if (restaurant.IsFavorite)
+        {
+            await ApiService.RemoveFromFavoritesAsync(restaurant.Id);
+            restaurant.IsFavorite = false;
+        }
+        else
+        {
+            await ApiService.AddToFavoritesAsync(restaurant.Id);
+            restaurant.IsFavorite = true;
+        }
+    }
+}

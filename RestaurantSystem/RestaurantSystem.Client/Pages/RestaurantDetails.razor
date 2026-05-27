@@ -1,0 +1,74 @@
+@page "/restaurant/{Id:int}"
+@using RestaurantSystem.Client.Services
+@using RestaurantSystem.Shared.Dtos
+@inject ApiService ApiService
+
+<div class="container mt-4">
+    @if (restaurant == null)
+    {
+        <div class="spinner-border"></div>
+    }
+    else
+    {
+        <div class="card mb-4">
+            @if (!string.IsNullOrEmpty(restaurant.ImagePath))
+            {
+                <img src="http://localhost:5000/api/files/@restaurant.ImagePath" class="card-img-top" style="height: 300px; object-fit: cover;">
+            }
+            <div class="card-body">
+                <h2 class="card-title">@restaurant.Name</h2>
+                <p class="lead">@restaurant.Description</p>
+                <p><strong>Адрес:</strong> @restaurant.Address</p>
+            </div>
+        </div>
+
+        <h4>Меню</h4>
+        @if (menuItems == null)
+        {
+            <p>Загрузка меню...</p>
+        }
+        else if (!menuItems.Any())
+        {
+            <p>В меню пока ничего нет.</p>
+        }
+        else
+        {
+            <div class="row">
+                @foreach (var item in menuItems)
+                {
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="row g-0">
+                                <div class="col-md-4">
+                                    @if (!string.IsNullOrEmpty(item.ImagePath))
+                                    {
+                                        <img src="http://localhost:5000/api/files/@item.ImagePath" class="img-fluid rounded-start" alt="@item.Name">
+                                    }
+                                </div>
+                                <div class="col-md-8">
+                                    <div class="card-body">
+                                        <h5 class="card-title">@item.Name</h5>
+                                        <p class="card-text">@item.Description</p>
+                                        <p class="card-text"><strong>@item.Price ₽</strong></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private RestaurantDto? restaurant;
+    private List<MenuItemDto>? menuItems;
+
+    protected override async Task OnInitializedAsync()
+    {
+        restaurant = await ApiService.GetRestaurantByIdAsync(Id);
+        menuItems = await ApiService.GetMenuItemsAsync(Id);
+    }
+}

@@ -1,0 +1,62 @@
+@page "/favorites"
+@using Microsoft.AspNetCore.Authorization
+@using RestaurantSystem.Client.Services
+@using RestaurantSystem.Shared.Dtos
+@attribute [Authorize]
+@inject ApiService ApiService
+
+<div class="container mt-4">
+    <h3>Избранные рестораны</h3>
+
+    @if (favorites == null)
+    {
+        <div class="spinner-border"></div>
+    }
+    else if (!favorites.Any())
+    {
+        <p>У вас пока нет избранных ресторанов.</p>
+    }
+    else
+    {
+        <div class="row">
+            @foreach (var r in favorites)
+            {
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100 shadow-sm">
+                        @if (!string.IsNullOrEmpty(r.ImagePath))
+                        {
+                            <img src="http://localhost:5000/api/files/@r.ImagePath" class="card-img-top" style="height: 200px; object-fit: cover;">
+                        }
+                        <div class="card-body">
+                            <h5 class="card-title">@r.Name</h5>
+                            <p class="card-text text-truncate">@r.Description</p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <a href="/restaurant/@r.Id" class="btn btn-outline-primary">Меню</a>
+                                <button class="btn btn-link text-danger" @onclick="() => RemoveFromFavorites(r.Id)">
+                                    <i class="bi bi-heart-fill"></i> Удалить
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<RestaurantDto>? favorites;
+
+    protected override async Task OnInitializedAsync() => await LoadFavorites();
+
+    private async Task LoadFavorites()
+    {
+        favorites = await ApiService.GetUserFavoritesAsync();
+    }
+
+    private async Task RemoveFromFavorites(int id)
+    {
+        await ApiService.RemoveFromFavoritesAsync(id);
+        await LoadFavorites();
+    }
+}
