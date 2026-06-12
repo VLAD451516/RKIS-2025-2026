@@ -19,31 +19,42 @@ namespace KovalevaSalaryCalculator.Models
         public int ChildrenCount { get; set; }
     }
 
+    public class AppSettings
+    {
+        public decimal MROT { get; set; } = 19242m;
+        public decimal MaxDeductionIncome { get; set; } = 350000m;
+    }
+
     public class SalaryCalculation
     {
         public Guid EmployeeId { get; set; }
         public string EmployeeName { get; set; } = string.Empty;
         public DateTime Period { get; set; }
+        public bool IsAdvance { get; set; }
 
         public decimal BaseSalary { get; set; }
         public decimal Bonus { get; set; }
         public int WorkedDays { get; set; }
         public int NormDays { get; set; }
         public int ChildrenCount { get; set; }
-
-        public const decimal MROT = 19242m;
+        public decimal CurrentYearIncomeBefore { get; set; }
+        public decimal MROT { get; set; } = 19242m;
+        public decimal MaxDeductionIncome { get; set; } = 350000m;
 
         public decimal ProportionalSalary => NormDays > 0 ? Math.Round(BaseSalary / NormDays * WorkedDays, 2) : 0;
-        public decimal GrossSalary => ProportionalSalary + Bonus;
+        public decimal GrossSalary => ProportionalSalary + (IsAdvance ? 0 : Bonus);
 
         public decimal NDFL
         {
             get
             {
-                decimal deduction = 1400m * ChildrenCount;
+                // Child deduction limit check
+                bool applyDeduction = (CurrentYearIncomeBefore + GrossSalary <= MaxDeductionIncome);
+                decimal deduction = applyDeduction ? 1400m * ChildrenCount : 0;
+
                 decimal taxableBase = GrossSalary - deduction;
                 if (taxableBase < 0) taxableBase = 0;
-                return Math.Round(taxableBase * 0.13m, 0); // NDFL is usually rounded to rubles
+                return Math.Round(taxableBase * 0.13m, 0);
             }
         }
 

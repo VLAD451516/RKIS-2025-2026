@@ -4,24 +4,25 @@ namespace KovalevaSalaryCalculator.Services
 {
     public class SalaryService
     {
-        public SalaryCalculation CalculateSalary(Employee employee, decimal performanceValue, int workedDays, int normDays, DateTime period)
+        public SalaryCalculation CalculateSalary(Employee employee, decimal performanceValue, int workedDays, int normDays, DateTime period, bool isAdvance, decimal currentYearIncome, AppSettings settings)
         {
             decimal bonus = 0;
+            int actualWorkedDays = isAdvance ? workedDays / 2 : workedDays;
 
-            switch (employee.Type)
+            if (!isAdvance)
             {
-                case PositionType.Retail:
-                    // 2% of sales
-                    bonus = Math.Round(performanceValue * 0.02m, 2);
-                    break;
-                case PositionType.Logistics:
-                    // 50 rubles per cargo unit handled
-                    bonus = performanceValue * 50m;
-                    break;
-                case PositionType.Admin:
-                    // Fixed bonus
-                    bonus = performanceValue;
-                    break;
+                switch (employee.Type)
+                {
+                    case PositionType.Retail:
+                        bonus = Math.Round(performanceValue * 0.02m, 2);
+                        break;
+                    case PositionType.Logistics:
+                        bonus = performanceValue * 50m;
+                        break;
+                    case PositionType.Admin:
+                        bonus = performanceValue;
+                        break;
+                }
             }
 
             return new SalaryCalculation
@@ -29,11 +30,15 @@ namespace KovalevaSalaryCalculator.Services
                 EmployeeId = employee.Id,
                 EmployeeName = employee.Name,
                 Period = period,
+                IsAdvance = isAdvance,
                 BaseSalary = employee.BaseSalary,
                 Bonus = bonus,
-                WorkedDays = workedDays,
+                WorkedDays = actualWorkedDays,
                 NormDays = normDays,
-                ChildrenCount = employee.ChildrenCount
+                ChildrenCount = employee.ChildrenCount,
+                CurrentYearIncomeBefore = currentYearIncome,
+                MROT = settings.MROT,
+                MaxDeductionIncome = settings.MaxDeductionIncome
             };
         }
     }
