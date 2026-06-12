@@ -65,9 +65,9 @@ namespace KovalevaSalaryCalculator
             Console.WriteLine("ОКВЭД: 47.11 (Торговля розничная преимущественно пищевыми продуктами)");
             Console.WriteLine("       52.24.2 (Транспортная обработка прочих грузов)");
             Console.WriteLine("       52.29 (Деятельность вспомогательная прочая, связанная с перевозками)");
-            Console.WriteLine("Программа расчета заработной платы (Версия 5.0 Эксперт)");
+            Console.WriteLine("Программа расчета заработной платы (Версия 6.0 ЭТАЛОН)");
             Console.WriteLine("================================================================");
-            Console.WriteLine($"МРОТ (2025+): {settings.MROT:N2} | Лимит вычета: {settings.MaxDeductionIncome:N2}");
+            Console.WriteLine($"МРОТ: {settings.MROT:N2} | Порог НДФЛ: {settings.NDFLThreshold:N2}");
             Console.WriteLine("================================================================");
         }
 
@@ -152,7 +152,6 @@ namespace KovalevaSalaryCalculator
 
             bool isAdvance = ReadInt("1. Расчет аванса\n2. Итоговый расчет за месяц\nВыбор: ", 1, 2) == 1;
 
-            // Check for duplicates
             if (history.Any(h => h.EmployeeId == emp.Id && h.Period.Year == year && h.Period.Month == month && h.IsAdvance == isAdvance))
             {
                 Console.WriteLine($"Ошибка! Расчет типа '{(isAdvance ? "Аванс" : "Итого")}' уже существует для этого сотрудника за данный период.");
@@ -170,12 +169,12 @@ namespace KovalevaSalaryCalculator
             string dayPrompt = isAdvance ? "Введите отработано дней (для аванса): " : "Введите ВСЕГО отработанных дней за ПОЛНЫЙ месяц: ";
             int workedDays = ReadInt(dayPrompt, 0, normDays);
 
-            // Correct Cumulative Year Income (Exclude current month)
-            decimal currentYearIncome = history
-                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == year && h.Period.Month < month && !h.IsAdvance)
-                .Sum(h => h.GrossSalary);
+            // Correct Cumulative Taxable Base (Exclude current month)
+            decimal currentTaxableBase = history
+                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == year && h.Period.Month < month)
+                .Sum(h => h.TaxableBase);
 
-            var calc = salaryService.CalculateSalary(emp, performance, workedDays, normDays, period, isAdvance, currentYearIncome, settings, history);
+            var calc = salaryService.CalculateSalary(emp, performance, workedDays, normDays, period, isAdvance, currentTaxableBase, settings, history);
 
             if (calc.EmployeeDebt > 0)
             {
@@ -197,12 +196,28 @@ namespace KovalevaSalaryCalculator
             var periodHistory = history.Where(h => h.Period.Year == year && h.Period.Month == month).ToList();
             if (!periodHistory.Any()) { Console.WriteLine("Нет записей за этот период."); return; }
 
-            var grouped = periodHistory.GroupBy(h => h.EmployeeId).Select(g => new {
-                Name = g.First().EmployeeName,
-                Gross = g.Where(h => !h.IsAdvance).Sum(h => h.GrossSalary),
-                NDFL = g.Where(h => !h.IsAdvance).Sum(h => h.NDFL),
-                Insurance = g.Where(h => !h.IsAdvance).Sum(h => h.InsurancePremiums),
-                Net = g.Sum(h => h.NetSalary)
+            var grouped = periodHistory.GroupBy(h => h.EmployeeId).Select(g => {
+                var final = g.FirstOrDefault(h => !h.IsAdvance);
+                if (final != null)
+                {
+                    return new {
+                        Name = final.EmployeeName,
+                        Gross = final.GrossSalary,
+                        NDFL = final.NDFL,
+                        Insurance = final.InsurancePremiums,
+                        Net = g.Sum(h => h.NetSalary)
+                    };
+                }
+                else
+                {
+                    return new {
+                        Name = g.First().EmployeeName,
+                        Gross = g.Sum(h => h.GrossSalary),
+                        NDFL = g.Sum(h => h.NDFL),
+                        Insurance = 0m,
+                        Net = g.Sum(h => h.NetSalary)
+                    };
+                }
             }).ToList();
 
             Console.WriteLine($"\n--- Сводная ведомость за {new DateTime(year, month, 1):MMMM yyyy} ---");
@@ -250,7 +265,7 @@ namespace KovalevaSalaryCalculator
                    $"Премия/Бонус:         {c.Bonus,15:N2}\n" +
                    $"Начислено (Грязными): {c.GrossSalary,15:N2}\n" +
                    $"НДФЛ:                 {c.NDFL,15:N2}\n" +
-                   (c.AdvanceDeduction > 0 ? $"Удержан аванс:        {c.AdvanceDeduction,15:N2}\n" : "") +
+                   (c.AdvanceDeduction > 0 ? $"Выплачен аванс:       {c.AdvanceDeduction,15:N2}\n" : "") +
                    (c.EmployeeDebt > 0 ? $"ДОЛГ СОТРУДНИКА:      {c.EmployeeDebt,15:N2}\n" : "") +
                    $"-------------------------------------------\n" +
                    $"К ВЫПЛАТЕ (Чистыми):  {c.NetSalary,15:N2}\n" +

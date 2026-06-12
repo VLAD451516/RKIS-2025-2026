@@ -21,9 +21,9 @@ namespace KovalevaSalaryCalculator.Models
 
     public class AppSettings
     {
-        public decimal MROT { get; set; } = 22440m; // Actual for 2025+
-        public decimal MaxDeductionIncome { get; set; } = 450000m; // Increased for 2025+
-        public decimal NDFLThreshold { get; set; } = 2400000m; // 13% vs 15% threshold
+        public decimal MROT { get; set; } = 22440m;
+        public decimal MaxDeductionIncome { get; set; } = 450000m;
+        public decimal NDFLThreshold { get; set; } = 2400000m;
     }
 
     public class SalaryCalculation
@@ -38,7 +38,7 @@ namespace KovalevaSalaryCalculator.Models
         public int WorkedDays { get; set; }
         public int NormDays { get; set; }
         public int ChildrenCount { get; set; }
-        public decimal CurrentYearIncomeBefore { get; set; }
+        public decimal CurrentYearTaxableBaseBefore { get; set; }
         public decimal MROT { get; set; } = 22440m;
         public decimal MaxDeductionIncome { get; set; } = 450000m;
         public decimal NDFLThreshold { get; set; } = 2400000m;
@@ -47,19 +47,16 @@ namespace KovalevaSalaryCalculator.Models
         public decimal ProportionalSalary => NormDays > 0 ? Math.Round(BaseSalary / NormDays * WorkedDays, 2) : 0;
         public decimal GrossSalary => Math.Round(ProportionalSalary + (IsAdvance ? 0 : Bonus), 2);
 
-        public decimal NDFL
+        public decimal TaxableBase
         {
             get
             {
-                if (IsAdvance)
-                {
-                    // For advance payments in RF, NDFL is calculated on the full amount without deductions
-                    return Math.Round(GrossSalary * 0.13m, 0, MidpointRounding.AwayFromZero);
-                }
+                if (IsAdvance) return GrossSalary;
 
-                // Child deduction logic (Progressive: 1st-1400, 2nd-2800, 3rd+-6000)
                 decimal totalDeduction = 0;
-                if (CurrentYearIncomeBefore + GrossSalary <= MaxDeductionIncome)
+                // Note: Deduction check should use Gross income per tax rules, but threshold uses taxable base
+                // Here we assume simple yearly Gross for deduction limit check to keep it distinct
+                if (CurrentYearTaxableBaseBefore + GrossSalary <= MaxDeductionIncome)
                 {
                     for (int i = 1; i <= ChildrenCount; i++)
                     {
@@ -69,28 +66,32 @@ namespace KovalevaSalaryCalculator.Models
                     }
                 }
 
-                decimal taxableBase = GrossSalary - totalDeduction;
-                if (taxableBase < 0) taxableBase = 0;
+                decimal res = GrossSalary - totalDeduction;
+                return res > 0 ? res : 0;
+            }
+        }
 
+        public decimal NDFL
+        {
+            get
+            {
                 decimal result = 0;
-                decimal cumulativeTotal = CurrentYearIncomeBefore + taxableBase;
+                decimal currentBase = TaxableBase;
+                decimal cumulativeTotal = CurrentYearTaxableBaseBefore + currentBase;
 
-                if (CurrentYearIncomeBefore >= NDFLThreshold)
+                if (CurrentYearTaxableBaseBefore >= NDFLThreshold)
                 {
-                    // Already in 15% bracket
-                    result = taxableBase * 0.15m;
+                    result = currentBase * 0.15m;
                 }
                 else if (cumulativeTotal > NDFLThreshold)
                 {
-                    // Partial 13%, partial 15%
-                    decimal lowPart = NDFLThreshold - CurrentYearIncomeBefore;
-                    decimal highPart = taxableBase - lowPart;
+                    decimal lowPart = NDFLThreshold - CurrentYearTaxableBaseBefore;
+                    decimal highPart = currentBase - lowPart;
                     result = (lowPart * 0.13m) + (highPart * 0.15m);
                 }
                 else
                 {
-                    // Fully 13%
-                    result = taxableBase * 0.13m;
+                    result = currentBase * 0.13m;
                 }
 
                 return Math.Round(result, 0, MidpointRounding.AwayFromZero);

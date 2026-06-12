@@ -6,7 +6,7 @@ namespace KovalevaSalaryCalculator.Services
 {
     public class SalaryService
     {
-        public SalaryCalculation CalculateSalary(Employee employee, decimal performanceValue, int workedDays, int normDays, DateTime period, bool isAdvance, decimal currentYearIncome, AppSettings settings, List<SalaryCalculation> history)
+        public SalaryCalculation CalculateSalary(Employee employee, decimal performanceValue, int workedDays, int normDays, DateTime period, bool isAdvance, decimal currentYearTaxableBase, AppSettings settings, List<SalaryCalculation> history)
         {
             decimal bonus = 0;
             decimal advanceDeduction = 0;
@@ -26,7 +26,6 @@ namespace KovalevaSalaryCalculator.Services
                         break;
                 }
 
-                // Sum all previous advances for the month/year
                 advanceDeduction = history
                     .Where(h => h.EmployeeId == employee.Id && h.IsAdvance && h.Period.Year == period.Year && h.Period.Month == period.Month)
                     .Sum(h => h.NetSalary);
@@ -43,7 +42,7 @@ namespace KovalevaSalaryCalculator.Services
                 WorkedDays = workedDays,
                 NormDays = normDays,
                 ChildrenCount = employee.ChildrenCount,
-                CurrentYearIncomeBefore = currentYearIncome,
+                CurrentYearTaxableBaseBefore = currentYearTaxableBase,
                 MROT = settings.MROT,
                 MaxDeductionIncome = settings.MaxDeductionIncome,
                 NDFLThreshold = settings.NDFLThreshold,
