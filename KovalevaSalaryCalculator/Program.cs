@@ -60,7 +60,7 @@ namespace KovalevaSalaryCalculator
             Console.WriteLine("ОКВЭД: 47.11 (Торговля розничная преимущественно пищевыми продуктами)");
             Console.WriteLine("       52.24.2 (Транспортная обработка прочих грузов)");
             Console.WriteLine("       52.29 (Деятельность вспомогательная прочая, связанная с перевозками)");
-            Console.WriteLine("Программа расчета заработной платы (Версия 3.1)");
+            Console.WriteLine("Программа расчета заработной платы (Версия 4.0)");
             Console.WriteLine("================================================================");
             Console.WriteLine($"МРОТ: {settings.MROT:N2} | Лимит вычета: {settings.MaxDeductionIncome:N2}");
             Console.WriteLine("================================================================");
@@ -143,6 +143,10 @@ namespace KovalevaSalaryCalculator
             int index = ReadInt("\nВыберите номер сотрудника: ", 1, employees.Count);
             var emp = employees[index - 1];
 
+            int year = ReadInt("Введите год расчета: ", 2000, 2100);
+            int month = ReadInt("Введите месяц расчета (1-12): ", 1, 12);
+            DateTime period = new DateTime(year, month, DateTime.DaysInMonth(year, month));
+
             Console.WriteLine("1. Расчет аванса (за первую половину месяца)");
             Console.WriteLine("2. Итоговый расчет за месяц");
             bool isAdvance = ReadInt("Выбор: ", 1, 2) == 1;
@@ -157,12 +161,12 @@ namespace KovalevaSalaryCalculator
             int normDays = ReadInt("Норма дней: ", 1, 31);
             int workedDays = ReadInt("Отработано дней: ", 0, normDays);
 
-            // Calculate current year income
+            // Calculate current year income (only final calculations to avoid double counting)
             decimal currentYearIncome = history
-                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == DateTime.Now.Year)
+                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == year && !h.IsAdvance)
                 .Sum(h => h.GrossSalary);
 
-            var calc = salaryService.CalculateSalary(emp, performance, workedDays, normDays, DateTime.Now, isAdvance, currentYearIncome, settings, history);
+            var calc = salaryService.CalculateSalary(emp, performance, workedDays, normDays, period, isAdvance, currentYearIncome, settings, history);
             history.Add(calc);
             storageService.SaveHistory(history);
 
@@ -183,11 +187,18 @@ namespace KovalevaSalaryCalculator
                 return;
             }
 
+            // Accounting: Gross, NDFL and Premiums should only count final (!IsAdvance) records to avoid double counting
+            // NetSalary should count all records (Advance + Final)
+            decimal totalGross = periodHistory.Where(h => !h.IsAdvance).Sum(h => h.GrossSalary);
+            decimal totalNDFL = periodHistory.Where(h => !h.IsAdvance).Sum(h => h.NDFL);
+            decimal totalInsurance = periodHistory.Where(h => !h.IsAdvance).Sum(h => h.InsurancePremiums);
+            decimal totalNet = periodHistory.Sum(h => h.NetSalary);
+
             Console.WriteLine($"\n--- Сводная ведомость за {new DateTime(year, month, 1):MMMM yyyy} ---");
-            Console.WriteLine($"Начислено (грязными): {periodHistory.Sum(h => h.GrossSalary):N2}");
-            Console.WriteLine($"Удержано НДФЛ:       {periodHistory.Sum(h => h.NDFL):N2}");
-            Console.WriteLine($"К выплате (на руки): {periodHistory.Sum(h => h.NetSalary):N2}");
-            Console.WriteLine($"Страховые взносы:    {periodHistory.Sum(h => h.InsurancePremiums):N2}");
+            Console.WriteLine($"Начислено (грязными): {totalGross:N2}");
+            Console.WriteLine($"Удержано НДФЛ:       {totalNDFL:N2}");
+            Console.WriteLine($"К выплате (на руки): {totalNet:N2}");
+            Console.WriteLine($"Страховые взносы:    {totalInsurance:N2}");
         }
 
         static void ExportSalarySlip()
@@ -225,10 +236,10 @@ namespace KovalevaSalaryCalculator
                    $"Норма дней:           {c.NormDays,15}\n" +
                    $"Отработано дней:      {c.WorkedDays,15}\n" +
                    $"Начислено по окладу:  {c.ProportionalSalary,15:N2}\n" +
-                   (c.AdvanceDeduction > 0 ? $"Удержан аванс:        {c.AdvanceDeduction,15:N2}\n" : "") +
                    $"Премия/Бонус:         {c.Bonus,15:N2}\n" +
                    $"Начислено (Грязными): {c.GrossSalary,15:N2}\n" +
                    $"НДФЛ (13%):           {c.NDFL,15:N2}\n" +
+                   (c.AdvanceDeduction > 0 ? $"Выплачен аванс:       {c.AdvanceDeduction,15:N2}\n" : "") +
                    $"-------------------------------------------\n" +
                    $"К ВЫПЛАТЕ (Чистыми):  {c.NetSalary,15:N2}\n" +
                    $"-------------------------------------------\n" +

@@ -26,7 +26,7 @@ namespace KovalevaSalaryCalculator.Services
                         break;
                 }
 
-                // Smart deduction: find previous advance for this month
+                // Find previous advance (net amount) for this month/year
                 var previousAdvance = history.FirstOrDefault(h =>
                     h.EmployeeId == employee.Id &&
                     h.IsAdvance &&
@@ -35,7 +35,7 @@ namespace KovalevaSalaryCalculator.Services
 
                 if (previousAdvance != null)
                 {
-                    advanceDeduction = previousAdvance.GrossSalary;
+                    advanceDeduction = previousAdvance.NetSalary;
                 }
             }
 

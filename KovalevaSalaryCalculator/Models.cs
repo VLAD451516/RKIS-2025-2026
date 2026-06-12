@@ -43,14 +43,14 @@ namespace KovalevaSalaryCalculator.Models
         public decimal AdvanceDeduction { get; set; } = 0;
 
         public decimal ProportionalSalary => NormDays > 0 ? Math.Round(BaseSalary / NormDays * WorkedDays, 2) : 0;
-        public decimal GrossSalary => Math.Round(ProportionalSalary + (IsAdvance ? 0 : Bonus) - AdvanceDeduction, 2);
+        public decimal GrossSalary => Math.Round(ProportionalSalary + (IsAdvance ? 0 : Bonus), 2);
 
         public decimal NDFL
         {
             get
             {
-                // Child deduction limit check
-                bool applyDeduction = (CurrentYearIncomeBefore + GrossSalary <= MaxDeductionIncome);
+                // Child deduction only applies to final calculation, not advance
+                bool applyDeduction = !IsAdvance && (CurrentYearIncomeBefore + GrossSalary <= MaxDeductionIncome);
                 decimal deduction = applyDeduction ? 1400m * ChildrenCount : 0;
 
                 decimal taxableBase = GrossSalary - deduction;
@@ -59,12 +59,15 @@ namespace KovalevaSalaryCalculator.Models
             }
         }
 
-        public decimal NetSalary => GrossSalary - NDFL;
+        public decimal NetSalary => GrossSalary - NDFL - (IsAdvance ? 0 : AdvanceDeduction);
 
         public decimal InsurancePremiums
         {
             get
             {
+                // Insurance premiums are not calculated on advance
+                if (IsAdvance) return 0;
+
                 if (GrossSalary <= MROT)
                 {
                     return Math.Round(GrossSalary * 0.30m, 2);
