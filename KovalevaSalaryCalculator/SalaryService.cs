@@ -26,17 +26,10 @@ namespace KovalevaSalaryCalculator.Services
                         break;
                 }
 
-                // Find previous advance (net amount) for this month/year
-                var previousAdvance = history.FirstOrDefault(h =>
-                    h.EmployeeId == employee.Id &&
-                    h.IsAdvance &&
-                    h.Period.Year == period.Year &&
-                    h.Period.Month == period.Month);
-
-                if (previousAdvance != null)
-                {
-                    advanceDeduction = previousAdvance.NetSalary;
-                }
+                // Sum all previous advances for the month/year
+                advanceDeduction = history
+                    .Where(h => h.EmployeeId == employee.Id && h.IsAdvance && h.Period.Year == period.Year && h.Period.Month == period.Month)
+                    .Sum(h => h.NetSalary);
             }
 
             return new SalaryCalculation
@@ -53,6 +46,7 @@ namespace KovalevaSalaryCalculator.Services
                 CurrentYearIncomeBefore = currentYearIncome,
                 MROT = settings.MROT,
                 MaxDeductionIncome = settings.MaxDeductionIncome,
+                NDFLThreshold = settings.NDFLThreshold,
                 AdvanceDeduction = advanceDeduction
             };
         }
