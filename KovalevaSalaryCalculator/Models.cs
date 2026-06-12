@@ -16,6 +16,7 @@ namespace KovalevaSalaryCalculator.Models
         public string Position { get; set; } = string.Empty;
         public PositionType Type { get; set; }
         public decimal BaseSalary { get; set; }
+        public int ChildrenCount { get; set; }
     }
 
     public class SalaryCalculation
@@ -26,12 +27,45 @@ namespace KovalevaSalaryCalculator.Models
 
         public decimal BaseSalary { get; set; }
         public decimal Bonus { get; set; }
+        public int WorkedDays { get; set; }
+        public int NormDays { get; set; }
+        public int ChildrenCount { get; set; }
 
-        public decimal GrossSalary => BaseSalary + Bonus;
-        public decimal NDFL => Math.Round(GrossSalary * 0.13m, 2);
+        public const decimal MROT = 19242m;
+
+        public decimal ProportionalSalary => NormDays > 0 ? Math.Round(BaseSalary / NormDays * WorkedDays, 2) : 0;
+        public decimal GrossSalary => ProportionalSalary + Bonus;
+
+        public decimal NDFL
+        {
+            get
+            {
+                decimal deduction = 1400m * ChildrenCount;
+                decimal taxableBase = GrossSalary - deduction;
+                if (taxableBase < 0) taxableBase = 0;
+                return Math.Round(taxableBase * 0.13m, 0); // NDFL is usually rounded to rubles
+            }
+        }
+
         public decimal NetSalary => GrossSalary - NDFL;
 
-        public decimal InsurancePremiums => Math.Round(GrossSalary * 0.30m, 2); // Standard 30%
+        public decimal InsurancePremiums
+        {
+            get
+            {
+                if (GrossSalary <= MROT)
+                {
+                    return Math.Round(GrossSalary * 0.30m, 2);
+                }
+                else
+                {
+                    decimal lowPart = MROT * 0.30m;
+                    decimal highPart = (GrossSalary - MROT) * 0.15m;
+                    return Math.Round(lowPart + highPart, 2);
+                }
+            }
+        }
+
         public decimal TotalEmployerCost => GrossSalary + InsurancePremiums;
     }
 }
