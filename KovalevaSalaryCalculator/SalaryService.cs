@@ -1,13 +1,15 @@
 using KovalevaSalaryCalculator.Models;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace KovalevaSalaryCalculator.Services
 {
     public class SalaryService
     {
-        public SalaryCalculation CalculateSalary(Employee employee, decimal performanceValue, int workedDays, int normDays, DateTime period, bool isAdvance, decimal currentYearIncome, AppSettings settings)
+        public SalaryCalculation CalculateSalary(Employee employee, decimal performanceValue, int workedDays, int normDays, DateTime period, bool isAdvance, decimal currentYearIncome, AppSettings settings, List<SalaryCalculation> history)
         {
             decimal bonus = 0;
-            int actualWorkedDays = isAdvance ? workedDays / 2 : workedDays;
+            decimal advanceDeduction = 0;
 
             if (!isAdvance)
             {
@@ -23,6 +25,18 @@ namespace KovalevaSalaryCalculator.Services
                         bonus = performanceValue;
                         break;
                 }
+
+                // Smart deduction: find previous advance for this month
+                var previousAdvance = history.FirstOrDefault(h =>
+                    h.EmployeeId == employee.Id &&
+                    h.IsAdvance &&
+                    h.Period.Year == period.Year &&
+                    h.Period.Month == period.Month);
+
+                if (previousAdvance != null)
+                {
+                    advanceDeduction = previousAdvance.GrossSalary;
+                }
             }
 
             return new SalaryCalculation
@@ -33,12 +47,13 @@ namespace KovalevaSalaryCalculator.Services
                 IsAdvance = isAdvance,
                 BaseSalary = employee.BaseSalary,
                 Bonus = bonus,
-                WorkedDays = actualWorkedDays,
+                WorkedDays = workedDays,
                 NormDays = normDays,
                 ChildrenCount = employee.ChildrenCount,
                 CurrentYearIncomeBefore = currentYearIncome,
                 MROT = settings.MROT,
-                MaxDeductionIncome = settings.MaxDeductionIncome
+                MaxDeductionIncome = settings.MaxDeductionIncome,
+                AdvanceDeduction = advanceDeduction
             };
         }
     }

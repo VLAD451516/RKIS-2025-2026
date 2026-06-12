@@ -40,9 +40,10 @@ namespace KovalevaSalaryCalculator.Models
         public decimal CurrentYearIncomeBefore { get; set; }
         public decimal MROT { get; set; } = 19242m;
         public decimal MaxDeductionIncome { get; set; } = 350000m;
+        public decimal AdvanceDeduction { get; set; } = 0;
 
         public decimal ProportionalSalary => NormDays > 0 ? Math.Round(BaseSalary / NormDays * WorkedDays, 2) : 0;
-        public decimal GrossSalary => ProportionalSalary + (IsAdvance ? 0 : Bonus);
+        public decimal GrossSalary => Math.Round(ProportionalSalary + (IsAdvance ? 0 : Bonus) - AdvanceDeduction, 2);
 
         public decimal NDFL
         {

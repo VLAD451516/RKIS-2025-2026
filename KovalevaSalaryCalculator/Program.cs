@@ -60,7 +60,7 @@ namespace KovalevaSalaryCalculator
             Console.WriteLine("ОКВЭД: 47.11 (Торговля розничная преимущественно пищевыми продуктами)");
             Console.WriteLine("       52.24.2 (Транспортная обработка прочих грузов)");
             Console.WriteLine("       52.29 (Деятельность вспомогательная прочая, связанная с перевозками)");
-            Console.WriteLine("Программа расчета заработной платы (Версия 3.0)");
+            Console.WriteLine("Программа расчета заработной платы (Версия 3.1)");
             Console.WriteLine("================================================================");
             Console.WriteLine($"МРОТ: {settings.MROT:N2} | Лимит вычета: {settings.MaxDeductionIncome:N2}");
             Console.WriteLine("================================================================");
@@ -162,7 +162,7 @@ namespace KovalevaSalaryCalculator
                 .Where(h => h.EmployeeId == emp.Id && h.Period.Year == DateTime.Now.Year)
                 .Sum(h => h.GrossSalary);
 
-            var calc = salaryService.CalculateSalary(emp, performance, workedDays, normDays, DateTime.Now, isAdvance, currentYearIncome, settings);
+            var calc = salaryService.CalculateSalary(emp, performance, workedDays, normDays, DateTime.Now, isAdvance, currentYearIncome, settings, history);
             history.Add(calc);
             storageService.SaveHistory(history);
 
@@ -171,6 +171,7 @@ namespace KovalevaSalaryCalculator
 
         static void ShowSummaryStatement()
         {
+            if (!history.Any()) { Console.WriteLine("История пуста."); return; }
             int year = ReadInt("Введите год: ", 2000, 2100);
             int month = ReadInt("Введите месяц (1-12): ", 1, 12);
 
@@ -191,6 +192,7 @@ namespace KovalevaSalaryCalculator
 
         static void ExportSalarySlip()
         {
+            if (!history.Any()) { Console.WriteLine("История пуста."); return; }
             int year = ReadInt("Введите год: ", 2000, 2100);
             int month = ReadInt("Введите месяц (1-12): ", 1, 12);
 
@@ -223,6 +225,7 @@ namespace KovalevaSalaryCalculator
                    $"Норма дней:           {c.NormDays,15}\n" +
                    $"Отработано дней:      {c.WorkedDays,15}\n" +
                    $"Начислено по окладу:  {c.ProportionalSalary,15:N2}\n" +
+                   (c.AdvanceDeduction > 0 ? $"Удержан аванс:        {c.AdvanceDeduction,15:N2}\n" : "") +
                    $"Премия/Бонус:         {c.Bonus,15:N2}\n" +
                    $"Начислено (Грязными): {c.GrossSalary,15:N2}\n" +
                    $"НДФЛ (13%):           {c.NDFL,15:N2}\n" +
