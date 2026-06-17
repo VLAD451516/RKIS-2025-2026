@@ -117,14 +117,16 @@ namespace KovalevaSalaryCalculator.Models
             {
                 if (IsAdvance) return 0;
 
-                if (GrossSalary <= MROT)
+                decimal threshold = MROT * 1.5m; // Updated for 2025-2026 legislation
+
+                if (GrossSalary <= threshold)
                 {
                     return Math.Round(GrossSalary * 0.30m, 2);
                 }
                 else
                 {
-                    decimal lowPart = MROT * 0.30m;
-                    decimal highPart = (GrossSalary - MROT) * 0.15m;
+                    decimal lowPart = threshold * 0.30m;
+                    decimal highPart = (GrossSalary - threshold) * 0.15m;
                     return Math.Round(lowPart + highPart, 2);
                 }
             }

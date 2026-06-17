@@ -169,9 +169,9 @@ namespace KovalevaSalaryCalculator
             string dayPrompt = isAdvance ? "Введите отработано дней (для аванса): " : "Введите ВСЕГО отработанных дней за ПОЛНЫЙ месяц: ";
             int workedDays = ReadInt(dayPrompt, 0, normDays);
 
-            // Correct Cumulative Taxable Base (Exclude current month)
+            // Correct Cumulative Taxable Base (Exclude current month, skip advances to avoid double counting)
             decimal currentTaxableBase = history
-                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == year && h.Period.Month < month)
+                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == year && h.Period.Month < month && !h.IsAdvance)
                 .Sum(h => h.TaxableBase);
 
             var calc = salaryService.CalculateSalary(emp, performance, workedDays, normDays, period, isAdvance, currentTaxableBase, settings, history);
@@ -225,7 +225,7 @@ namespace KovalevaSalaryCalculator
             Console.WriteLine(new string('-', 75));
             foreach (var item in grouped)
             {
-                Console.WriteLine("{0,-25} | {1,10:N0} | {2,10:N0} | {3,10:N0} | {4,10:N0}", item.Name, item.Gross, item.NDFL, item.Insurance, item.Net);
+                Console.WriteLine("{0,-25} | {1,10:N2} | {2,10:N2} | {3,10:N2} | {4,10:N2}", item.Name, item.Gross, item.NDFL, item.Insurance, item.Net);
             }
             Console.WriteLine(new string('-', 75));
             Console.WriteLine("{0,-25} | {1,10:N2} | {2,10:N2} | {3,10:N2} | {4,10:N2}", "ИТОГО", grouped.Sum(x => x.Gross), grouped.Sum(x => x.NDFL), grouped.Sum(x => x.Insurance), grouped.Sum(x => x.Net));
