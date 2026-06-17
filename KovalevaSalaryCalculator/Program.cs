@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using KovalevaSalaryCalculator.Models;
 using KovalevaSalaryCalculator.Services;
+using KovalevaSalaryCalculator.Tests;
 
 namespace KovalevaSalaryCalculator
 {
@@ -18,6 +19,12 @@ namespace KovalevaSalaryCalculator
 
         static void Main(string[] args)
         {
+            if (args.Length > 0 && args[0] == "--test")
+            {
+                ManualTest.Run();
+                return;
+            }
+
             employees = storageService.LoadEmployees();
             history = storageService.LoadHistory();
             settings = storageService.LoadSettings();
@@ -65,7 +72,7 @@ namespace KovalevaSalaryCalculator
         static void PrintHeader()
         {
             Console.WriteLine("================================================================");
-            Console.WriteLine("ИП Ковалева Татьяна Сергеевна (Версия 8.0 FINAL)");
+            Console.WriteLine("ИП Ковалева Татьяна Сергеевна (Версия 8.1 PRO)");
             Console.WriteLine("ОКВЭД: 47.11 | 52.24.2 | 52.29");
             Console.WriteLine($"МРОТ: {settings.MROT:N2} | Лимит вычета: {settings.MaxDeductionIncome:N2}");
             Console.WriteLine("================================================================");
@@ -129,13 +136,19 @@ namespace KovalevaSalaryCalculator
             ListEmployees(); if (!employees.Any()) return;
             var emp = employees[ReadInt("Выберите номер сотрудника: ", 1, employees.Count) - 1];
 
-            int year = ReadInt("Введите год расчета: ", 2020, 2100);
-            int month = ReadInt("Введите месяц расчета (1-12): ", 1, 12);
-            DateTime period = new DateTime(year, month, DateTime.DaysInMonth(year, month));
+            int yearInput = ReadInt("Введите год расчета: ", 2020, 2100);
+            int monthInput = ReadInt("Введите месяц расчета (1-12): ", 1, 12);
+            DateTime period = new DateTime(yearInput, monthInput, DateTime.DaysInMonth(yearInput, monthInput));
 
             bool isAdv = ReadInt("1. Расчет аванса | 2. Итоговый расчет за месяц\nВыбор: ", 1, 2) == 1;
 
-            if (history.Any(h => h.EmployeeId == emp.Id && h.Period.Year == year && h.Period.Month == month && h.IsAdvance == isAdv))
+            if (isAdv && history.Any(h => h.EmployeeId == emp.Id && h.Period.Year == yearInput && h.Period.Month == monthInput && !h.IsAdvance))
+            {
+                Console.WriteLine("Ошибка! Итоговый расчет уже существует. Аванс невозможен.");
+                return;
+            }
+
+            if (history.Any(h => h.EmployeeId == emp.Id && h.Period.Year == yearInput && h.Period.Month == monthInput && h.IsAdvance == isAdv))
             {
                 Console.WriteLine("Ошибка! Расчет такого типа уже существует для этого периода.");
                 return;
@@ -146,15 +159,15 @@ namespace KovalevaSalaryCalculator
             int worked = ReadInt("Отработано дней: ", 0, norm);
 
             // Cumulative income for thresholds (Exclude current month, only Final records to avoid doubling)
-            decimal currentYearGrossBefore = history
-                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == year && h.Period.Month < month && !h.IsAdvance)
+            decimal cumulativeGross = history
+                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == yearInput && h.Period.Month < monthInput && !h.IsAdvance)
                 .Sum(h => h.GrossSalary);
 
-            decimal currentYearTaxableBefore = history
-                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == year && h.Period.Month < month && !h.IsAdvance)
+            decimal cumulativeTaxable = history
+                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == yearInput && h.Period.Month < monthInput && !h.IsAdvance)
                 .Sum(h => h.TaxableBase);
 
-            var calc = salaryService.CalculateSalary(emp, perf, worked, norm, period, isAdv, currentYearGrossBefore, currentYearTaxableBefore, settings, history);
+            var calc = salaryService.CalculateSalary(emp, perf, worked, norm, period, isAdv, cumulativeGross, cumulativeTaxable, settings, history);
 
             if (calc.EmployeeDebt > 0)
             {
@@ -171,40 +184,47 @@ namespace KovalevaSalaryCalculator
             Console.WriteLine("\n--- Настройки системы ---");
             Console.WriteLine($"1. Изменить МРОТ (сейчас {settings.MROT:N2})");
             Console.WriteLine($"2. Изменить лимит детских вычетов (сейчас {settings.MaxDeductionIncome:N2})");
+            Console.WriteLine("3. Просмотреть ставки НДФЛ");
             Console.WriteLine("0. Назад");
 
             string choice = Console.ReadLine() ?? "";
             if (choice == "1") settings.MROT = ReadDecimal("Новый МРОТ: ", 0);
             else if (choice == "2") settings.MaxDeductionIncome = ReadDecimal("Новый лимит: ", 0);
+            else if (choice == "3")
+            {
+                foreach(var tier in settings.NDFLTiers)
+                    Console.WriteLine($"Лимит до: {tier.Limit,12:N0} | Ставка: {tier.Rate:P0}");
+            }
 
-            if (choice != "0") storageService.SaveSettings(settings);
+            if (choice != "0" && choice != "3") storageService.SaveSettings(settings);
         }
 
         static void ManageHistory()
         {
             if (!history.Any()) { Console.WriteLine("История пуста."); return; }
-            Console.WriteLine("\n--- Управление историей ---");
-            Console.WriteLine("1. Показать последние 10 записей");
-            Console.WriteLine("2. Удалить конкретную запись");
-            Console.WriteLine("3. Полная очистка истории");
-            Console.WriteLine("0. Назад");
+            while (true)
+            {
+                Console.Clear();
+                Console.WriteLine("\n--- Управление историей ---");
+                for (int i = 0; i < history.Count; i++)
+                    Console.WriteLine($"{i + 1,3}. {history[i].EmployeeName} | {history[i].Period:MM.yyyy} | {(history[i].IsAdvance ? "Аванс" : "Итог")} | Net: {history[i].NetSalary:N2}");
 
-            string choice = Console.ReadLine() ?? "";
-            if (choice == "1")
-            {
-                var list = history.Skip(Math.Max(0, history.Count - 10)).ToList();
-                for (int i = 0; i < list.Count; i++)
-                    Console.WriteLine($"{i + 1}. {list[i].EmployeeName} | {list[i].Period:MM.yyyy} | {(list[i].IsAdvance ? "Аванс" : "Итог")} | К выплате: {list[i].NetSalary:N2}");
-            }
-            else if (choice == "2")
-            {
-                int idx = ReadInt("Введите номер записи для удаления (или 0): ", 0, history.Count);
-                if (idx > 0) { history.RemoveAt(idx - 1); storageService.SaveHistory(history); Console.WriteLine("Удалено."); }
-            }
-            else if (choice == "3")
-            {
-                Console.Write("Вы уверены, что хотите удалить ВСЮ историю? (y/n): ");
-                if (Console.ReadLine()?.ToLower() == "y") { history.Clear(); storageService.SaveHistory(history); }
+                Console.WriteLine("\n1. Удалить конкретную запись");
+                Console.WriteLine("2. Полная очистка истории");
+                Console.WriteLine("0. Назад");
+
+                string choice = Console.ReadLine() ?? "";
+                if (choice == "1")
+                {
+                    int idx = ReadInt("Введите номер записи для удаления (или 0): ", 0, history.Count);
+                    if (idx > 0) { history.RemoveAt(idx - 1); storageService.SaveHistory(history); Console.WriteLine("Удалено."); }
+                }
+                else if (choice == "2")
+                {
+                    Console.Write("Вы уверены? (y/n): ");
+                    if (Console.ReadLine()?.ToLower() == "y") { history.Clear(); storageService.SaveHistory(history); break; }
+                }
+                else if (choice == "0") break;
             }
         }
 
@@ -236,9 +256,9 @@ namespace KovalevaSalaryCalculator
         static void ExportSalarySlip()
         {
             if (!history.Any()) return;
-            int y = ReadInt("Год: ", 2020, 2100);
-            int m = ReadInt("Месяц: ", 1, 12);
-            var list = history.Where(h => h.Period.Year == y && h.Period.Month == m).ToList();
+            int year = ReadInt("Год: ", 2020, 2100);
+            int month = ReadInt("Месяц: ", 1, 12);
+            var list = history.Where(h => h.Period.Year == year && h.Period.Month == month).ToList();
             if (!list.Any()) { Console.WriteLine("Записей не найдено."); return; }
 
             for (int i = 0; i < list.Count; i++)
@@ -254,7 +274,7 @@ namespace KovalevaSalaryCalculator
         static string GetSalarySlipText(SalaryCalculation c) =>
             $"ИП Ковалева Татьяна Сергеевна\nРАСЧЕТНЫЙ ЛИСТОК ЗА {c.Period:MM.yyyy} ({(c.IsAdvance ? "АВАНС" : "ИТОГ")})\nСотрудник: {c.EmployeeName}\n" +
             $"-------------------------------------------\n" +
-            $"Оклад:         {c.BaseSalary,15:N2}\nНорма/Факт дн: {c.NormDays,5} / {c.WorkedDays}\nНачислено:     {c.GrossSalary,15:N2}\nНДФЛ (уд.):    {c.NDFL,15:N2}\n" +
+            $"Оклад:     {c.BaseSalary,15:N2}\nНорма/Факт дн: {c.NormDays,5} / {c.WorkedDays}\nНачислено:     {c.GrossSalary,15:N2}\nНДФЛ (уд.):    {c.NDFL,15:N2}\n" +
             (c.AdvanceDeduction > 0 ? $"Удерж. аванс:  {c.AdvanceDeduction,15:N2}\n" : "") +
             (c.EmployeeDebt > 0 ? $"ДОЛГ СОТР.:    {c.EmployeeDebt,15:N2}\n" : "") +
             $"К ВЫПЛАТЕ:     {c.NetSalary,15:N2}\n-------------------------------------------\n" +

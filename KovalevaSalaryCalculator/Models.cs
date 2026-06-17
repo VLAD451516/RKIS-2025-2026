@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace KovalevaSalaryCalculator.Models
@@ -20,16 +21,25 @@ namespace KovalevaSalaryCalculator.Models
         public int ChildrenCount { get; set; }
     }
 
+    public class NDFLTier
+    {
+        public decimal Limit { get; set; }
+        public decimal Rate { get; set; }
+
+        public NDFLTier() { }
+        public NDFLTier(decimal limit, decimal rate) { Limit = limit; Rate = rate; }
+    }
+
     public class AppSettings
     {
         public decimal MROT { get; set; } = 22440m;
         public decimal MaxDeductionIncome { get; set; } = 450000m;
-        public (decimal Limit, decimal Rate)[] NDFLTiers { get; set; } = {
-            (2400000m, 0.13m),
-            (5000000m, 0.15m),
-            (20000000m, 0.18m),
-            (50000000m, 0.20m),
-            (decimal.MaxValue, 0.22m)
+        public List<NDFLTier> NDFLTiers { get; set; } = new() {
+            new NDFLTier(2400000m, 0.13m),
+            new NDFLTier(5000000m, 0.15m),
+            new NDFLTier(20000000m, 0.18m),
+            new NDFLTier(50000000m, 0.20m),
+            new NDFLTier(decimal.MaxValue, 0.22m)
         };
     }
 
@@ -53,7 +63,7 @@ namespace KovalevaSalaryCalculator.Models
         // Settings Snapshots
         public decimal MROTSnapshot { get; set; }
 
-        // Calculation Results (Stored as data, no logic here for persistence stability)
+        // Calculation Results (Stored as data)
         public decimal ProportionalSalary { get; set; }
         public decimal GrossSalary { get; set; }
         public decimal TaxableBase { get; set; }
