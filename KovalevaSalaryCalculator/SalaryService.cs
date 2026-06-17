@@ -1,4 +1,5 @@
 using KovalevaSalaryCalculator.Models;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -6,8 +7,19 @@ namespace KovalevaSalaryCalculator.Services
 {
     public class SalaryService
     {
-        public SalaryCalculation CalculateSalary(Employee employee, decimal performanceValue, int workedDays, int normDays, DateTime period, bool isAdvance, decimal currentYearGrossBefore, AppSettings settings, List<SalaryCalculation> history)
+        public SalaryCalculation CalculateSalary(
+            Employee employee,
+            decimal performanceValue,
+            int workedDays,
+            int normDays,
+            DateTime period,
+            bool isAdvance,
+            decimal currentYearGrossBefore,
+            decimal currentYearTaxableBaseBefore,
+            AppSettings settings,
+            List<SalaryCalculation> history)
         {
+            decimal proportionalSalary = normDays > 0 ? Math.Round(employee.BaseSalary / normDays * workedDays, 2) : 0;
             decimal bonus = 0;
             decimal advanceDeduction = 0;
 
@@ -26,9 +38,59 @@ namespace KovalevaSalaryCalculator.Services
                         break;
                 }
 
+                // Sum all previous advance net payments for the same month/year
                 advanceDeduction = history
                     .Where(h => h.EmployeeId == employee.Id && h.IsAdvance && h.Period.Year == period.Year && h.Period.Month == period.Month)
                     .Sum(h => h.NetSalary);
+            }
+
+            decimal grossSalary = Math.Round(proportionalSalary + (isAdvance ? 0 : bonus), 2);
+
+            // Taxable Base Calculation
+            decimal taxableBase;
+            if (isAdvance)
+            {
+                taxableBase = grossSalary;
+            }
+            else
+            {
+                decimal childDeduction = 0;
+                // Limit check uses cumulative GROSS as per legislation
+                if (currentYearGrossBefore + grossSalary <= settings.MaxDeductionIncome)
+                {
+                    for (int i = 1; i <= employee.ChildrenCount; i++)
+                    {
+                        if (i == 1 || i == 2) childDeduction += 2800m; // Updated for 2025
+                        else childDeduction += 6000m;
+                    }
+                }
+                taxableBase = Math.Max(0, grossSalary - childDeduction);
+            }
+
+            // Progressive NDFL Calculation
+            // Using TaxableBase for progressive threshold
+            decimal ndfl = CalculateNDFL(currentYearTaxableBaseBefore, taxableBase, settings);
+
+            // Net Payout Calculation
+            decimal netPayout = grossSalary - ndfl - (isAdvance ? 0 : advanceDeduction);
+            decimal netSalary = Math.Max(0, netPayout);
+            decimal debt = netPayout < 0 ? Math.Abs(netPayout) : 0;
+
+            // Insurance Premiums (MSP rates)
+            decimal insurance = 0;
+            if (!isAdvance)
+            {
+                decimal threshold = settings.MROT * 1.5m; // Updated for 2025 rule (1.5 * MROT)
+                if (grossSalary <= threshold)
+                {
+                    insurance = Math.Round(grossSalary * 0.30m, 2);
+                }
+                else
+                {
+                    decimal lowPart = threshold * 0.30m;
+                    decimal highPart = (grossSalary - threshold) * 0.15m;
+                    insurance = Math.Round(lowPart + highPart, 2);
+                }
             }
 
             return new SalaryCalculation
@@ -43,10 +105,42 @@ namespace KovalevaSalaryCalculator.Services
                 NormDays = normDays,
                 ChildrenCount = employee.ChildrenCount,
                 CurrentYearGrossBefore = currentYearGrossBefore,
-                MROT = settings.MROT,
-                MaxDeductionIncome = settings.MaxDeductionIncome,
-                AdvanceDeduction = advanceDeduction
+                CurrentYearTaxableBaseBefore = currentYearTaxableBaseBefore,
+                MROTSnapshot = settings.MROT,
+                ProportionalSalary = proportionalSalary,
+                GrossSalary = grossSalary,
+                TaxableBase = taxableBase,
+                NDFL = ndfl,
+                AdvanceDeduction = advanceDeduction,
+                NetSalary = netSalary,
+                EmployeeDebt = debt,
+                InsurancePremiums = insurance
             };
+        }
+
+        private decimal CalculateNDFL(decimal prevTaxableTotal, decimal currentTaxableAmount, AppSettings settings)
+        {
+            decimal totalTax = 0;
+            decimal remainingAmount = currentTaxableAmount;
+            decimal cumulativeTotal = prevTaxableTotal;
+
+            foreach (var tier in settings.NDFLTiers)
+            {
+                if (remainingAmount <= 0) break;
+
+                if (cumulativeTotal < tier.Limit)
+                {
+                    decimal availableSpace = tier.Limit - cumulativeTotal;
+                    decimal amountInThisTier = Math.Min(remainingAmount, availableSpace);
+
+                    totalTax += amountInThisTier * tier.Rate;
+
+                    remainingAmount -= amountInThisTier;
+                    cumulativeTotal += amountInThisTier;
+                }
+            }
+
+            return Math.Round(totalTax, 0, MidpointRounding.AwayFromZero);
         }
     }
 }
