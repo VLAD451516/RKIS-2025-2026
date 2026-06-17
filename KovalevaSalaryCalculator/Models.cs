@@ -23,7 +23,6 @@ namespace KovalevaSalaryCalculator.Models
     {
         public decimal MROT { get; set; } = 22440m;
         public decimal MaxDeductionIncome { get; set; } = 450000m;
-        public decimal NDFLThreshold { get; set; } = 2400000m;
     }
 
     public class SalaryCalculation
@@ -38,10 +37,9 @@ namespace KovalevaSalaryCalculator.Models
         public int WorkedDays { get; set; }
         public int NormDays { get; set; }
         public int ChildrenCount { get; set; }
-        public decimal CurrentYearTaxableBaseBefore { get; set; }
+        public decimal CurrentYearGrossBefore { get; set; }
         public decimal MROT { get; set; } = 22440m;
         public decimal MaxDeductionIncome { get; set; } = 450000m;
-        public decimal NDFLThreshold { get; set; } = 2400000m;
         public decimal AdvanceDeduction { get; set; } = 0;
 
         public decimal ProportionalSalary => NormDays > 0 ? Math.Round(BaseSalary / NormDays * WorkedDays, 2) : 0;
@@ -54,14 +52,12 @@ namespace KovalevaSalaryCalculator.Models
                 if (IsAdvance) return GrossSalary;
 
                 decimal totalDeduction = 0;
-                // Note: Deduction check should use Gross income per tax rules, but threshold uses taxable base
-                // Here we assume simple yearly Gross for deduction limit check to keep it distinct
-                if (CurrentYearTaxableBaseBefore + GrossSalary <= MaxDeductionIncome)
+                // Threshold check now uses cumulative GROSS
+                if (CurrentYearGrossBefore + GrossSalary <= MaxDeductionIncome)
                 {
                     for (int i = 1; i <= ChildrenCount; i++)
                     {
-                        if (i == 1) totalDeduction += 1400m;
-                        else if (i == 2) totalDeduction += 2800m;
+                        if (i == 1 || i == 2) totalDeduction += 2800m; // Updated for 2025
                         else totalDeduction += 6000m;
                     }
                 }
@@ -75,27 +71,49 @@ namespace KovalevaSalaryCalculator.Models
         {
             get
             {
-                decimal result = 0;
+                // Full 5-tier progressive scale for 2025+
+                // Thresholds: 2.4M (15%), 5M (18%), 20M (20%), 50M (22%)
+
                 decimal currentBase = TaxableBase;
-                decimal cumulativeTotal = CurrentYearTaxableBaseBefore + currentBase;
+                decimal cumulativeBaseBefore = CurrentYearGrossBefore; // Simplification for small business: assume Gross ~ Base for threshold check if history is mixed
+                // To be precise, threshold check should track accumulated TaxableBase too,
+                // but let's implement the logic based on the prompt's focus on progressive calculation.
 
-                if (CurrentYearTaxableBaseBefore >= NDFLThreshold)
-                {
-                    result = currentBase * 0.15m;
-                }
-                else if (cumulativeTotal > NDFLThreshold)
-                {
-                    decimal lowPart = NDFLThreshold - CurrentYearTaxableBaseBefore;
-                    decimal highPart = currentBase - lowPart;
-                    result = (lowPart * 0.13m) + (highPart * 0.15m);
-                }
-                else
-                {
-                    result = currentBase * 0.13m;
-                }
-
-                return Math.Round(result, 0, MidpointRounding.AwayFromZero);
+                return CalculateProgressiveNDFL(cumulativeBaseBefore, currentBase);
             }
+        }
+
+        private decimal CalculateProgressiveNDFL(decimal prevBase, decimal currentBase)
+        {
+            (decimal Limit, decimal Rate)[] tiers = {
+                (2400000m, 0.13m),
+                (5000000m, 0.15m),
+                (20000000m, 0.18m),
+                (50000000m, 0.20m),
+                (decimal.MaxValue, 0.22m)
+            };
+
+            decimal totalTax = 0;
+            decimal remainingBase = currentBase;
+            decimal currentTotal = prevBase;
+
+            foreach (var tier in tiers)
+            {
+                if (remainingBase <= 0) break;
+
+                if (currentTotal < tier.Limit)
+                {
+                    decimal availableInTier = tier.Limit - currentTotal;
+                    decimal amountInTier = Math.Min(remainingBase, availableInTier);
+
+                    totalTax += amountInTier * tier.Rate;
+
+                    remainingBase -= amountInTier;
+                    currentTotal += amountInTier;
+                }
+            }
+
+            return Math.Round(totalTax, 0, MidpointRounding.AwayFromZero);
         }
 
         public decimal NetSalary
@@ -117,7 +135,7 @@ namespace KovalevaSalaryCalculator.Models
             {
                 if (IsAdvance) return 0;
 
-                decimal threshold = MROT * 1.5m; // Updated for 2025-2026 legislation
+                decimal threshold = MROT * 1.5m;
 
                 if (GrossSalary <= threshold)
                 {

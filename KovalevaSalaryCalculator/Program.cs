@@ -65,9 +65,9 @@ namespace KovalevaSalaryCalculator
             Console.WriteLine("ОКВЭД: 47.11 (Торговля розничная преимущественно пищевыми продуктами)");
             Console.WriteLine("       52.24.2 (Транспортная обработка прочих грузов)");
             Console.WriteLine("       52.29 (Деятельность вспомогательная прочая, связанная с перевозками)");
-            Console.WriteLine("Программа расчета заработной платы (Версия 6.0 ЭТАЛОН)");
+            Console.WriteLine("Программа расчета заработной платы (Версия 7.0 PRO)");
             Console.WriteLine("================================================================");
-            Console.WriteLine($"МРОТ: {settings.MROT:N2} | Порог НДФЛ: {settings.NDFLThreshold:N2}");
+            Console.WriteLine($"МРОТ (2025): {settings.MROT:N2} | Лимит вычета: {settings.MaxDeductionIncome:N2}");
             Console.WriteLine("================================================================");
         }
 
@@ -90,10 +90,22 @@ namespace KovalevaSalaryCalculator
         static void AddEmployee()
         {
             Console.WriteLine("\n--- Добавление сотрудника ---");
-            Console.Write("ФИО: ");
-            string name = Console.ReadLine() ?? "";
-            Console.Write("Должность: ");
-            string position = Console.ReadLine() ?? "";
+
+            string name = string.Empty;
+            while (string.IsNullOrWhiteSpace(name))
+            {
+                Console.Write("ФИО: ");
+                name = Console.ReadLine() ?? "";
+                if (string.IsNullOrWhiteSpace(name)) Console.WriteLine("Ошибка! ФИО не может быть пустым.");
+            }
+
+            string position = string.Empty;
+            while (string.IsNullOrWhiteSpace(position))
+            {
+                Console.Write("Должность: ");
+                position = Console.ReadLine() ?? "";
+                if (string.IsNullOrWhiteSpace(position)) Console.WriteLine("Ошибка! Должность не может быть пустой.");
+            }
 
             PositionType type = ReadInt("Тип деятельности (1-Розница, 2-Логистика, 3-Админ): ", 1, 3) switch
             {
@@ -169,12 +181,12 @@ namespace KovalevaSalaryCalculator
             string dayPrompt = isAdvance ? "Введите отработано дней (для аванса): " : "Введите ВСЕГО отработанных дней за ПОЛНЫЙ месяц: ";
             int workedDays = ReadInt(dayPrompt, 0, normDays);
 
-            // Correct Cumulative Taxable Base (Exclude current month, skip advances to avoid double counting)
-            decimal currentTaxableBase = history
+            // Calculation cumulative Gross (Exclude current month, skip advances to avoid double counting)
+            decimal currentYearGrossBefore = history
                 .Where(h => h.EmployeeId == emp.Id && h.Period.Year == year && h.Period.Month < month && !h.IsAdvance)
-                .Sum(h => h.TaxableBase);
+                .Sum(h => h.GrossSalary);
 
-            var calc = salaryService.CalculateSalary(emp, performance, workedDays, normDays, period, isAdvance, currentTaxableBase, settings, history);
+            var calc = salaryService.CalculateSalary(emp, performance, workedDays, normDays, period, isAdvance, currentYearGrossBefore, settings, history);
 
             if (calc.EmployeeDebt > 0)
             {
@@ -265,7 +277,7 @@ namespace KovalevaSalaryCalculator
                    $"Премия/Бонус:         {c.Bonus,15:N2}\n" +
                    $"Начислено (Грязными): {c.GrossSalary,15:N2}\n" +
                    $"НДФЛ:                 {c.NDFL,15:N2}\n" +
-                   (c.AdvanceDeduction > 0 ? $"Выплачен аванс:       {c.AdvanceDeduction,15:N2}\n" : "") +
+                   (c.AdvanceDeduction > 0 ? $"Удержан аванс:        {c.AdvanceDeduction,15:N2}\n" : "") +
                    (c.EmployeeDebt > 0 ? $"ДОЛГ СОТРУДНИКА:      {c.EmployeeDebt,15:N2}\n" : "") +
                    $"-------------------------------------------\n" +
                    $"К ВЫПЛАТЕ (Чистыми):  {c.NetSalary,15:N2}\n" +
