@@ -56,7 +56,18 @@ namespace KovalevaSalaryCalculator.Services
             {
                 if (!File.Exists(HistoryFile)) return new List<SalaryCalculation>();
                 string json = File.ReadAllText(HistoryFile);
-                return JsonSerializer.Deserialize<List<SalaryCalculation>>(json) ?? new List<SalaryCalculation>();
+                var history = JsonSerializer.Deserialize<List<SalaryCalculation>>(json);
+
+                // Data Migration / Healing for old records
+                if (history != null)
+                {
+                    foreach (var h in history)
+                    {
+                        if (h.Id == Guid.Empty) h.Id = Guid.NewGuid();
+                    }
+                }
+
+                return history ?? new List<SalaryCalculation>();
             }
             catch (Exception ex)
             {
@@ -86,7 +97,7 @@ namespace KovalevaSalaryCalculator.Services
                 string json = File.ReadAllText(SettingsFile);
                 var settings = JsonSerializer.Deserialize<AppSettings>(json);
 
-                // Heal: Ensure tiers are present if loaded from old format
+                // Heal: Ensure tiers are present
                 if (settings != null && (settings.NDFLTiers == null || settings.NDFLTiers.Count == 0))
                 {
                     settings.NDFLTiers = new AppSettings().NDFLTiers;

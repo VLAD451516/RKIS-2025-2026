@@ -55,13 +55,12 @@ namespace KovalevaSalaryCalculator.Services
             else
             {
                 decimal childDeduction = 0;
-                // Child deduction right is based on the income cumulative total BEFORE current month.
-                // The deduction is granted in the month the threshold is reached and stops only from the next month.
+                // Deduction check uses cumulative GROSS per legislation
                 if (currentYearGrossBefore <= settings.MaxDeductionIncome)
                 {
                     for (int i = 1; i <= employee.ChildrenCount; i++)
                     {
-                        if (i == 1 || i == 2) childDeduction += 2800m; // Updated for 2025
+                        if (i == 1 || i == 2) childDeduction += 2800m; // 2025 rates
                         else childDeduction += 6000m;
                     }
                 }
@@ -80,7 +79,8 @@ namespace KovalevaSalaryCalculator.Services
             decimal insurance = 0;
             if (!isAdvance)
             {
-                decimal threshold = settings.MROT; // According to MSP legislation, threshold is exactly 1 MROT
+                // SME threshold is exactly 1 MROT (Law No. 176-FZ dated July 12, 2024)
+                decimal threshold = settings.MROT;
                 if (grossSalary <= threshold)
                 {
                     insurance = Math.Round(grossSalary * 0.30m, 2);
@@ -95,7 +95,7 @@ namespace KovalevaSalaryCalculator.Services
 
             return new SalaryCalculation
             {
-                Id = Guid.NewGuid(), // Explicitly set ID
+                Id = Guid.NewGuid(), // Explicitly set ID for tracking
                 EmployeeId = employee.Id,
                 EmployeeName = employee.Name,
                 Period = period,
