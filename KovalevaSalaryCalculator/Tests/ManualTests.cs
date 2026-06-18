@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace KovalevaSalaryCalculator.Tests
 {
-    public class ManualTest
+    public class ManualTests
     {
         public static void Run()
         {

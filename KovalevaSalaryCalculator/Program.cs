@@ -21,7 +21,7 @@ namespace KovalevaSalaryCalculator
         {
             if (args.Length > 0 && args[0] == "--test")
             {
-                ManualTest.Run();
+                ManualTests.Run();
                 return;
             }
 
@@ -175,12 +175,15 @@ namespace KovalevaSalaryCalculator
             DateTime calcAnchor = isAdv ? new DateTime(year, month, 15) : new DateTime(year, month, 28);
 
             // Calculation cumulative values (Sum history excluding current recalculation)
+            // Rule: Sum only Final records for previous months + Advance for current month (if calculating Final)
             decimal currentYearGrossBefore = history
-                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == year && h.Period < calcAnchor)
+                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == year)
+                .Where(h => (h.Period.Month < month && !h.IsAdvance) || (h.Period.Month == month && h.IsAdvance && !isAdv))
                 .Sum(h => h.GrossSalary);
 
             decimal currentYearTaxableBefore = history
-                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == year && h.Period < calcAnchor)
+                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == year)
+                .Where(h => (h.Period.Month < month && !h.IsAdvance) || (h.Period.Month == month && h.IsAdvance && !isAdv))
                 .Sum(h => h.TaxableBase);
 
             var calc = salaryService.CalculateSalary(emp, perf, worked, norm, period, isAdv, currentYearGrossBefore, currentYearTaxableBefore, settings, history);
@@ -270,12 +273,14 @@ namespace KovalevaSalaryCalculator
                 if (final != null)
                 {
                     // Full monthly calculation exists
+                    // Gross for final calculation already includes total monthly gross.
+                    // NDFL in summary should be the SUM of NDFL for the month.
                     return new {
                         Name = final.EmployeeName,
                         Gross = final.GrossSalary,
-                        NDFL = final.NDFL,
+                        NDFL = g.Sum(h => h.NDFL),
                         Ins = final.InsurancePremiums,
-                        Net = final.NetSalary // Final calculation includes advance adjustment
+                        Net = g.Sum(h => h.NetSalary) // Total payout for the month
                     };
                 }
                 else
