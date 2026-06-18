@@ -5,6 +5,10 @@ using System.Linq;
 
 namespace KovalevaSalaryCalculator.Services
 {
+    /// <summary>
+    /// Core service for calculating salaries, taxes, and insurance premiums.
+    /// Implements 2025 Russian tax legislation including progressive NDFL and SME benefits.
+    /// </summary>
     public class SalaryService
     {
         public SalaryCalculation CalculateSalary(
@@ -19,55 +23,66 @@ namespace KovalevaSalaryCalculator.Services
             AppSettings settings,
             List<SalaryCalculation> history)
         {
+            // 1. Calculate proportional part of the base salary based on worked days
             decimal proportionalSalary = normDays > 0 ? Math.Round(employee.BaseSalary / normDays * workedDays, 2) : 0;
             decimal bonus = 0;
             decimal advanceDeduction = 0;
 
+            // 2. Performance-based bonuses (only for final monthly settlement)
             if (!isAdvance)
             {
                 switch (employee.Type)
                 {
                     case PositionType.Retail:
+                        // 2% of sales
                         bonus = Math.Round(performanceValue * 0.02m, 2);
                         break;
                     case PositionType.Logistics:
+                        // 50 RUB per load handled
                         bonus = performanceValue * 50m;
                         break;
                     case PositionType.Admin:
+                        // Fixed discretionary bonus
                         bonus = performanceValue;
                         break;
                 }
 
-                // Sum all previous advance net payments for the same month/year
+                // Sum all net payments made as advances in the current month to subtract from final payout
                 advanceDeduction = history
                     .Where(h => h.EmployeeId == employee.Id && h.IsAdvance && h.Period.Year == period.Year && h.Period.Month == period.Month)
                     .Sum(h => h.NetSalary);
             }
 
+            // 3. Gross Calculation
+            // Advance is typically just a part of the proportional salary.
+            // Final settlement includes the full proportional salary + bonuses.
             decimal grossSalary = Math.Round(proportionalSalary + (isAdvance ? 0 : bonus), 2);
 
-            // Taxable Base Calculation
+            // 4. Taxable Base Calculation
             decimal taxableBase;
             if (isAdvance)
             {
+                // Advances don't usually apply child deductions until the final monthly settlement
                 taxableBase = grossSalary;
             }
             else
             {
                 decimal childDeduction = 0;
-                // Deduction check uses cumulative GROSS per legislation
+                // Child deduction logic (2025 rules):
+                // Limits apply to cumulative GROSS income since start of the year.
                 if (currentYearGrossBefore <= settings.MaxDeductionIncome)
                 {
                     for (int i = 1; i <= employee.ChildrenCount; i++)
                     {
-                        if (i == 1 || i == 2) childDeduction += 2800m; // 2025 rates
-                        else childDeduction += 6000m;
+                        if (i == 1 || i == 2) childDeduction += 2800m; // 2800 RUB for 1st and 2nd child
+                        else childDeduction += 6000m; // 6000 RUB for 3rd and subsequent children
                     }
                 }
                 taxableBase = Math.Max(0, grossSalary - childDeduction);
             }
 
-            // Progressive NDFL Calculation
+            // 5. Progressive NDFL Calculation
+            // Thresholds: 2.4M, 5M, 20M, 50M RUB cumulative taxable income.
             decimal ndfl;
             decimal totalMonthlyNDFL;
 
@@ -78,7 +93,7 @@ namespace KovalevaSalaryCalculator.Services
             }
             else
             {
-                // currentYearTaxableBaseBefore for final calculation includes the advance taxable base
+                // Find what was already paid as tax on advances to determine the delta
                 decimal advanceTaxable = history
                     .Where(h => h.EmployeeId == employee.Id && h.IsAdvance && h.Period.Year == period.Year && h.Period.Month == period.Month)
                     .Sum(h => h.TaxableBase);
@@ -87,27 +102,30 @@ namespace KovalevaSalaryCalculator.Services
                     .Where(h => h.EmployeeId == employee.Id && h.IsAdvance && h.Period.Year == period.Year && h.Period.Month == period.Month)
                     .Sum(h => h.NDFL);
 
+                // Recalculate total tax for the entire month's income
                 decimal yearToDateBeforeMonth = currentYearTaxableBaseBefore - advanceTaxable;
                 totalMonthlyNDFL = CalculateNDFL(yearToDateBeforeMonth, taxableBase, settings);
 
-                // Transactional NDFL is the delta between total month tax and what was paid in advance
+                // Transactional NDFL is the delta needed to reach the total month tax
                 ndfl = Math.Max(0, totalMonthlyNDFL - advanceNDFL);
             }
 
-            // Net Payout Calculation
+            // 6. Net Payout Calculation
             // For Advance: Net = Gross(Adv) - NDFL(Adv)
-            // For Final: Net = Gross(Total) - NDFL(Total) - Net(Adv)
+            // For Final: Net = Gross(Total Month) - NDFL(Total Month) - Net(Paid in Advance)
             decimal netPayout = isAdvance
                 ? (grossSalary - ndfl)
                 : (grossSalary - totalMonthlyNDFL - advanceDeduction);
+
             decimal netSalary = Math.Max(0, netPayout);
             decimal debt = netPayout < 0 ? Math.Abs(netPayout) : 0;
 
-            // Insurance Premiums (MSP rates)
+            // 7. Employer Insurance Premiums (SME/MSP rates)
             decimal insurance = 0;
             if (!isAdvance)
             {
-                // SME threshold is exactly 1 MROT (Law No. 176-FZ dated July 12, 2024)
+                // SME threshold is 1 MROT (22,440 RUB in 2025)
+                // Below MROT: 30%, Above MROT: 15%
                 decimal threshold = settings.MROT;
                 if (grossSalary <= threshold)
                 {
@@ -121,9 +139,10 @@ namespace KovalevaSalaryCalculator.Services
                 }
             }
 
+            // 8. Resulting Snapshot
             return new SalaryCalculation
             {
-                Id = Guid.NewGuid(), // Explicitly set ID for tracking
+                Id = Guid.NewGuid(),
                 EmployeeId = employee.Id,
                 EmployeeName = employee.Name,
                 Period = period,
@@ -147,6 +166,9 @@ namespace KovalevaSalaryCalculator.Services
             };
         }
 
+        /// <summary>
+        /// Calculates tax across the progressive scale tiers.
+        /// </summary>
         private decimal CalculateNDFL(decimal prevTaxableTotal, decimal currentTaxableAmount, AppSettings settings)
         {
             decimal totalTax = 0;
@@ -169,6 +191,7 @@ namespace KovalevaSalaryCalculator.Services
                 }
             }
 
+            // Standard mathematical rounding for tax as per Russian legislation
             return Math.Round(totalTax, 0, MidpointRounding.AwayFromZero);
         }
     }

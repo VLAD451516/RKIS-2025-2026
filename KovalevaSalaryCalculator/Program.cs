@@ -19,11 +19,16 @@ namespace KovalevaSalaryCalculator
 
         static void Main(string[] args)
         {
+            Console.Title = "ИП Ковалева Т.С. - Расчет зарплаты 2025";
+
             if (args.Length > 0 && args[0] == "--test")
             {
                 ManualTests.Run();
                 return;
             }
+
+            // Migrating old files if they exist in root
+            MigrateDataFiles();
 
             employees = storageService.LoadEmployees();
             history = storageService.LoadHistory();
@@ -72,10 +77,22 @@ namespace KovalevaSalaryCalculator
         static void PrintHeader()
         {
             Console.WriteLine("================================================================");
-            Console.WriteLine("ИП Ковалева Татьяна Сергеевна (Версия 9.0 PRO FINAL)");
+            Console.WriteLine("ИП Ковалева Татьяна Сергеевна (Версия 9.1 FINAL)");
             Console.WriteLine("ОКВЭД: 47.11 | 52.24.2 | 52.29");
             Console.WriteLine($"МРОТ: {settings.MROT:N2} | Лимит вычета: {settings.MaxDeductionIncome:N2}");
             Console.WriteLine("================================================================");
+        }
+
+        static void MigrateDataFiles()
+        {
+            string[] files = { "data.json", "history.json", "settings.json" };
+            foreach (var f in files)
+            {
+                if (File.Exists(f))
+                {
+                    try { File.Move(f, Path.Combine("Data", f), true); } catch { }
+                }
+            }
         }
 
         static void ListEmployees()
@@ -102,7 +119,7 @@ namespace KovalevaSalaryCalculator
                 _ => PositionType.Admin
             };
 
-            decimal salary = ReadDecimal("Базовый оклад: ", 0);
+            decimal salary = ReadDecimal("Базовый оклад: ", 0, 10_000_000);
             int kids = ReadInt("Количество детей: ", 0, 20);
 
             employees.Add(new Employee { Name = name, Position = pos, Type = type, BaseSalary = salary, ChildrenCount = kids });
@@ -121,7 +138,7 @@ namespace KovalevaSalaryCalculator
             string pos = Console.ReadLine() ?? "";
             if (!string.IsNullOrWhiteSpace(pos)) emp.Position = pos;
 
-            decimal? salaryInput = ReadDecimalNullable($"Новый оклад (Enter чтобы оставить {emp.BaseSalary:N2}): ", 0);
+            decimal? salaryInput = ReadDecimalNullable($"Новый оклад (Enter чтобы оставить {emp.BaseSalary:N2}): ", 0, 10_000_000);
             if (salaryInput.HasValue) emp.BaseSalary = salaryInput.Value;
 
             int? kidsInput = ReadIntNullable($"Количество детей (Enter чтобы оставить {emp.ChildrenCount}): ", 0, 20);
@@ -158,6 +175,7 @@ namespace KovalevaSalaryCalculator
                 Console.WriteLine("Предупреждение: Аванс уже рассчитывался для этого периода.");
                 if (ReadString("Пересчитать аванс (удалить старый)? (y/n): ").ToLower() != "y") return;
                 history.RemoveAll(h => h.EmployeeId == emp.Id && h.Period.Year == year && h.Period.Month == month && h.IsAdvance);
+                storageService.SaveHistory(history);
             }
 
             if (!isAdv && finalExists)
@@ -165,14 +183,12 @@ namespace KovalevaSalaryCalculator
                 Console.WriteLine("Предупреждение: Итоговый расчет уже существует.");
                 if (ReadString("Пересчитать месяц (удалить старый итог)? (y/n): ").ToLower() != "y") return;
                 history.RemoveAll(h => h.EmployeeId == emp.Id && h.Period.Year == year && h.Period.Month == month && !h.IsAdvance);
+                storageService.SaveHistory(history);
             }
 
-            decimal perf = isAdv ? 0 : ReadDecimal("Введите показатели (продажи/грузы/премия): ", 0);
+            decimal perf = isAdv ? 0 : ReadDecimal("Введите показатели (продажи/грузы/премия): ", 0, 100_000_000);
             int norm = ReadInt("Норма рабочих дней: ", 1, 31);
             int worked = ReadInt("Отработано дней: ", 0, norm);
-
-            // Chronological reference for threshold calculation
-            DateTime calcAnchor = isAdv ? new DateTime(year, month, 15) : new DateTime(year, month, 28);
 
             // Calculation cumulative values (Sum history excluding current recalculation)
             // Rule: Sum only Final records for previous months + Advance for current month (if calculating Final)
@@ -208,8 +224,8 @@ namespace KovalevaSalaryCalculator
             Console.WriteLine("\nПРИМЕЧАНИЕ: Изменения не влияют на уже сохраненные расчеты (Snapshot-принцип).");
 
             string choice = Console.ReadLine() ?? "";
-            if (choice == "1") settings.MROT = ReadDecimal("Новый МРОТ: ", 0);
-            else if (choice == "2") settings.MaxDeductionIncome = ReadDecimal("Новый лимит: ", 0);
+            if (choice == "1") settings.MROT = ReadDecimal("Новый МРОТ: ", 0, 1_000_000);
+            else if (choice == "2") settings.MaxDeductionIncome = ReadDecimal("Новый лимит: ", 0, 100_000_000);
             else if (choice == "3")
             {
                 foreach(var tier in settings.NDFLTiers)
@@ -350,23 +366,23 @@ namespace KovalevaSalaryCalculator
             }
         }
 
-        static decimal ReadDecimal(string prompt, decimal min) {
+        static decimal ReadDecimal(string prompt, decimal min, decimal max = 100_000_000) {
             while (true) {
                 Console.Write(prompt); string s = Console.ReadLine()?.Replace(",", ".") ?? "";
-                if (decimal.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal r) && r >= min) return r;
-                Console.WriteLine($"Ошибка! Введите положительное число (минимум {min}).");
+                if (decimal.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal r) && r >= min && r <= max) return r;
+                Console.WriteLine($"Ошибка! Введите число от {min} до {max}.");
             }
         }
 
-        static decimal? ReadDecimalNullable(string prompt, decimal min = 0)
+        static decimal? ReadDecimalNullable(string prompt, decimal min = 0, decimal max = 100_000_000)
         {
             while (true)
             {
                 Console.Write(prompt);
                 string s = Console.ReadLine()?.Replace(",", ".") ?? "";
                 if (string.IsNullOrWhiteSpace(s)) return null;
-                if (decimal.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal r) && r >= min) return r;
-                Console.WriteLine($"Ошибка! Введите число >= {min} или оставьте пустым.");
+                if (decimal.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal r) && r >= min && r <= max) return r;
+                Console.WriteLine($"Ошибка! Введите число от {min} до {max} или оставьте пустым (Enter).");
             }
         }
 
@@ -386,7 +402,7 @@ namespace KovalevaSalaryCalculator
                 string s = Console.ReadLine() ?? "";
                 if (string.IsNullOrWhiteSpace(s)) return null;
                 if (int.TryParse(s, out int r) && r >= min && r <= max) return r;
-                Console.WriteLine($"Ошибка! Введите число от {min} до {max} или оставьте пустым.");
+                Console.WriteLine($"Ошибка! Введите число от {min} до {max} или оставьте пустым (Enter).");
             }
         }
     }

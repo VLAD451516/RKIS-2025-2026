@@ -5,9 +5,15 @@ namespace KovalevaSalaryCalculator.Services
 {
     public class StorageService
     {
-        private const string EmployeesFile = "data.json";
-        private const string HistoryFile = "history.json";
-        private const string SettingsFile = "settings.json";
+        private const string DataDir = "Data";
+        private const string EmployeesFile = "Data/data.json";
+        private const string HistoryFile = "Data/history.json";
+        private const string SettingsFile = "Data/settings.json";
+
+        public StorageService()
+        {
+            if (!Directory.Exists(DataDir)) Directory.CreateDirectory(DataDir);
+        }
 
         public void SaveEmployees(List<Employee> employees)
         {
