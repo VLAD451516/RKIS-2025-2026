@@ -174,6 +174,7 @@ namespace KovalevaSalaryCalculator
             // Chronological reference for threshold calculation
             DateTime calcAnchor = isAdv ? new DateTime(year, month, 15) : new DateTime(year, month, 28);
 
+            // Calculation cumulative values (Sum history excluding current recalculation)
             decimal currentYearGrossBefore = history
                 .Where(h => h.EmployeeId == emp.Id && h.Period.Year == year && h.Period < calcAnchor)
                 .Sum(h => h.GrossSalary);
@@ -222,13 +223,13 @@ namespace KovalevaSalaryCalculator
             {
                 Console.Clear();
                 Console.WriteLine("\n--- Управление историей ---");
-                // Sort history for display to make indexing easier to follow
+                // Stable sorting for consistent indexing
                 var displayList = history.OrderBy(h => h.Period).ThenBy(h => h.EmployeeName).ToList();
 
                 for (int i = 0; i < displayList.Count; i++)
                     Console.WriteLine($"{i + 1,3}. {displayList[i].EmployeeName} | {displayList[i].Period:MM.yyyy} | {(displayList[i].IsAdvance ? "Аванс" : "Итог")} | Net: {displayList[i].NetSalary:N2}");
 
-                Console.WriteLine("\n1. Удалить конкретную запись");
+                Console.WriteLine("\n1. Удалить запись по номеру");
                 Console.WriteLine("2. Полная очистка истории");
                 Console.WriteLine("0. Назад");
 
@@ -241,13 +242,15 @@ namespace KovalevaSalaryCalculator
                         var itemToRemove = displayList[num - 1];
                         history.Remove(itemToRemove);
                         storageService.SaveHistory(history);
-                        Console.WriteLine("Удалено.");
+                        Console.WriteLine("Запись успешно удалена. Список обновлен.");
+                        Console.WriteLine("Нажмите любую клавишу...");
+                        Console.ReadKey();
                     }
-                    if (history.Count == 0) break;
+                    if (!history.Any()) break;
                 }
                 else if (choice == "2")
                 {
-                    Console.Write("Вы уверены? (y/n): ");
+                    Console.Write("Вы уверены, что хотите очистить ВСЮ историю? (y/n): ");
                     if (Console.ReadLine()?.ToLower() == "y") { history.Clear(); storageService.SaveHistory(history); break; }
                 }
                 else if (choice == "0") break;
@@ -266,27 +269,24 @@ namespace KovalevaSalaryCalculator
                 var final = g.FirstOrDefault(h => !h.IsAdvance);
                 if (final != null)
                 {
-                    // If Final exists, it contains total month Gross and NDFL.
-                    // The Net payout is simply Gross - NDFL.
+                    // Full monthly calculation exists
                     return new {
                         Name = final.EmployeeName,
                         Gross = final.GrossSalary,
                         NDFL = final.NDFL,
                         Ins = final.InsurancePremiums,
-                        Net = final.GrossSalary - final.NDFL
+                        Net = final.NetSalary // Final calculation includes advance adjustment
                     };
                 }
                 else
                 {
-                    // Only advances exist
-                    decimal totalGross = g.Sum(h => h.GrossSalary);
-                    decimal totalNDFL = g.Sum(h => h.NDFL);
+                    // Only advances calculated so far
                     return new {
                         Name = g.First().EmployeeName,
-                        Gross = totalGross,
-                        NDFL = totalNDFL,
+                        Gross = g.Sum(h => h.GrossSalary),
+                        NDFL = g.Sum(h => h.NDFL),
                         Ins = 0m,
-                        Net = totalGross - totalNDFL
+                        Net = g.Sum(h => h.NetSalary)
                     };
                 }
             }).ToList();
@@ -355,12 +355,16 @@ namespace KovalevaSalaryCalculator
             }
         }
 
-        static decimal? ReadDecimalNullable(string prompt, decimal min) {
-            Console.Write(prompt); string s = Console.ReadLine()?.Replace(",", ".") ?? "";
-            if (string.IsNullOrWhiteSpace(s)) return null;
-            if (decimal.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal r) && r >= min) return r;
-            Console.WriteLine($"Ошибка! Введено неверное значение. Оставляем текущее.");
-            return null;
+        static decimal? ReadDecimalNullable(string prompt, decimal min = 0)
+        {
+            while (true)
+            {
+                Console.Write(prompt);
+                string s = Console.ReadLine()?.Replace(",", ".") ?? "";
+                if (string.IsNullOrWhiteSpace(s)) return null;
+                if (decimal.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal r) && r >= min) return r;
+                Console.WriteLine($"Ошибка! Введите число >= {min} или оставьте пустым.");
+            }
         }
 
         static int ReadInt(string prompt, int min, int max) {
@@ -371,12 +375,16 @@ namespace KovalevaSalaryCalculator
             }
         }
 
-        static int? ReadIntNullable(string prompt, int min, int max) {
-            Console.Write(prompt); string s = Console.ReadLine() ?? "";
-            if (string.IsNullOrWhiteSpace(s)) return null;
-            if (int.TryParse(s, out int r) && r >= min && r <= max) return r;
-            Console.WriteLine($"Ошибка! Введено неверное значение. Оставляем текущее.");
-            return null;
+        static int? ReadIntNullable(string prompt, int min, int max)
+        {
+            while (true)
+            {
+                Console.Write(prompt);
+                string s = Console.ReadLine() ?? "";
+                if (string.IsNullOrWhiteSpace(s)) return null;
+                if (int.TryParse(s, out int r) && r >= min && r <= max) return r;
+                Console.WriteLine($"Ошибка! Введите число от {min} до {max} или оставьте пустым.");
+            }
         }
     }
 }
