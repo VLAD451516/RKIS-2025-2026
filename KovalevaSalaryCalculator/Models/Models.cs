@@ -58,10 +58,7 @@ namespace KovalevaSalaryCalculator.Models
         public int NormDays { get; set; }
         public int ChildrenCount { get; set; }
 
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public decimal CurrentYearGrossBefore { get; set; }
-
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public decimal CurrentYearTaxableBaseBefore { get; set; }
 
         public decimal MROTSnapshot { get; set; }

@@ -220,19 +220,10 @@ namespace KovalevaSalaryCalculator
             int norm = ReadInt("Норма рабочих дней: ", 1, 31);
             int worked = ReadInt("Отработано дней: ", 0, norm);
 
-            // Calculation cumulative values (Sum history excluding current recalculation)
-            // Rule: Sum only Final records for previous months + Advance for current month (if calculating Final)
-            decimal currentYearGrossBefore = history
-                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == year)
-                .Where(h => (h.Period.Month < month && !h.IsAdvance) || (h.Period.Month == month && h.IsAdvance && !isAdv))
-                .Sum(h => h.GrossSalary);
+            // Calculation cumulative values
+            var (grossBefore, taxableBefore) = GetCumulativeTotals(emp.Id, year, month, isAdv);
 
-            decimal currentYearTaxableBefore = history
-                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == year)
-                .Where(h => (h.Period.Month < month && !h.IsAdvance) || (h.Period.Month == month && h.IsAdvance && !isAdv))
-                .Sum(h => h.TaxableBase);
-
-            var calc = salaryService.CalculateSalary(emp, perf, worked, norm, period, isAdv, currentYearGrossBefore, currentYearTaxableBefore, settings, history);
+            var calc = salaryService.CalculateSalary(emp, perf, worked, norm, period, isAdv, grossBefore, taxableBefore, settings, history);
 
             if (calc.EmployeeDebt > 0)
             {
@@ -386,6 +377,43 @@ namespace KovalevaSalaryCalculator
             employees.RemoveAt(idx);
             storageService.SaveEmployees(employees);
             Console.WriteLine("Сотрудник удален.");
+        }
+
+        /// <summary>
+        /// Calculates cumulative totals for an employee from the start of the year up to the current calculation point.
+        /// </summary>
+        static (decimal gross, decimal taxable) GetCumulativeTotals(Guid empId, int year, int month, bool isCurrentCalcAdvance)
+        {
+            // Rule 1: Sum 'Final' settlements for all PREVIOUS months of the year.
+            var prevMonthsFinals = history.Where(h => h.EmployeeId == empId && h.Period.Year == year && h.Period.Month < month && !h.IsAdvance);
+
+            // Rule 2: Sum all 'Advance' payments for the CURRENT month that were already calculated.
+            var currentMonthAdvances = history.Where(h => h.EmployeeId == empId && h.Period.Year == year && h.Period.Month == month && h.IsAdvance);
+
+            decimal gross = prevMonthsFinals.Sum(h => h.GrossSalary);
+            decimal taxable = prevMonthsFinals.Sum(h => h.TaxableBase);
+
+            // Both Advances and Final calculations for the same month need to see the cumulative total
+            // of previous months' Final settlements.
+            // BUT: The Final calculation MUST also see the CURRENT month's Advances.
+            // AND: If there are multiple advances (rare but possible), subsequent advances should see previous ones?
+            // Actually, usually there is only 1 advance and 1 final.
+
+            if (!isCurrentCalcAdvance)
+            {
+                // If we are calculating FINAL, we must include all advances of this month in the "Before" total
+                // so the SalaryService knows how much was already taxed.
+                gross += currentMonthAdvances.Sum(h => h.GrossSalary);
+                taxable += currentMonthAdvances.Sum(h => h.TaxableBase);
+            }
+            else
+            {
+                // If we are calculating an ADVANCE, and somehow there are already advances, sum them.
+                gross += currentMonthAdvances.Sum(h => h.GrossSalary);
+                taxable += currentMonthAdvances.Sum(h => h.TaxableBase);
+            }
+
+            return (gross, taxable);
         }
 
         static string ReadString(string prompt) {

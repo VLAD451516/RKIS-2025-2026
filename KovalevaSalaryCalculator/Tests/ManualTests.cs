@@ -43,9 +43,22 @@ namespace KovalevaSalaryCalculator.Tests
             Console.WriteLine($"Test 3 (Advance): NDFL={adv3.NDFL} (Expected 6500), Net={adv3.NetSalary}");
             Console.WriteLine($"Test 3 (Final): NDFL={final3.NDFL} (Expected 6500), Net={final3.NetSalary} (Expected 43500)");
 
-            if (calc1.NDFL == 936 && calc2.NDFL == 16500 && final3.NDFL == 6500 && final3.NetSalary == 43500)
+            // 4. Persistence & Threshold Cross Month
+            // Month 1: 2.3M Gross. Month 2: 200k Gross.
+            // Month 1: Taxable 2.3M. NDFL 13% = 299,000.
+            // Month 2: Crosses 2.4M. 100k @ 13%, 100k @ 15%. Total month NDFL: 13k + 15k = 28,000.
+            var emp4 = new Employee { Id = Guid.NewGuid(), Name = "Threshold Test", BaseSalary = 2300000, ChildrenCount = 0 };
+            var calc4_1 = salaryService.CalculateSalary(emp4, 0, 20, 20, new DateTime(2025, 1, 31), false, 0, 0, settings, history);
+            history.Add(calc4_1);
+
+            emp4.BaseSalary = 200000;
+            var calc4_2 = salaryService.CalculateSalary(emp4, 0, 20, 20, new DateTime(2025, 2, 28), false, 2300000, 2300000, settings, history);
+            Console.WriteLine($"Test 4 (M1): NDFL={calc4_1.NDFL} (Expected 299000)");
+            Console.WriteLine($"Test 4 (M2 Cross): NDFL={calc4_2.NDFL} (Expected 28000)");
+
+            if (calc1.NDFL == 936 && calc2.NDFL == 16500 && final3.NDFL == 6500 && final3.NetSalary == 43500 && calc4_2.NDFL == 28000)
             {
-                Console.WriteLine("FINAL PRO LOGIC TEST PASSED (All 3 Scenarios)");
+                Console.WriteLine("FINAL PRO LOGIC TEST PASSED (All 4 Scenarios)");
             }
             else
             {

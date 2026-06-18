@@ -83,39 +83,47 @@ namespace KovalevaSalaryCalculator.Services
 
             // 5. Progressive NDFL Calculation
             // Thresholds: 2.4M, 5M, 20M, 50M RUB cumulative taxable income.
+            // currentYearTaxableBaseBefore already includes all previous payments (Finals of prev months + Advances of current month)
+
             decimal ndfl;
-            decimal totalMonthlyNDFL;
+            decimal totalMonthlyTaxSoFar;
 
             if (isAdvance)
             {
+                // Calculate tax for this specific advance based on what was already earned this year.
                 ndfl = CalculateNDFL(currentYearTaxableBaseBefore, taxableBase, settings);
-                totalMonthlyNDFL = ndfl;
+                totalMonthlyTaxSoFar = ndfl;
             }
             else
             {
-                // Find what was already paid as tax on advances to determine the delta
-                decimal advanceTaxable = history
+                // Calculating FINAL Monthly Settlement.
+                // currentYearTaxableBaseBefore passed from Program.cs includes previous months AND current month's advances.
+                // taxableBase is the TOTAL taxable income for the current month (Gross - Child Deductions).
+
+                // We need to know how much tax (and taxable base) was ALREADY paid in current month advances.
+                var currentMonthAdvances = history
                     .Where(h => h.EmployeeId == employee.Id && h.IsAdvance && h.Period.Year == period.Year && h.Period.Month == period.Month)
-                    .Sum(h => h.TaxableBase);
+                    .ToList();
 
-                decimal advanceNDFL = history
-                    .Where(h => h.EmployeeId == employee.Id && h.IsAdvance && h.Period.Year == period.Year && h.Period.Month == period.Month)
-                    .Sum(h => h.NDFL);
+                decimal paidTaxOnAdvances = currentMonthAdvances.Sum(h => h.NDFL);
+                decimal paidTaxableOnAdvances = currentMonthAdvances.Sum(h => h.TaxableBase);
 
-                // Recalculate total tax for the entire month's income
-                decimal yearToDateBeforeMonth = currentYearTaxableBaseBefore - advanceTaxable;
-                totalMonthlyNDFL = CalculateNDFL(yearToDateBeforeMonth, taxableBase, settings);
+                // Start calculation from the beginning of the month (excluding current month's advances).
+                decimal taxableBeforeMonth = currentYearTaxableBaseBefore - paidTaxableOnAdvances;
 
-                // Transactional NDFL is the delta needed to reach the total month tax
-                ndfl = Math.Max(0, totalMonthlyNDFL - advanceNDFL);
+                // Calculate total tax for the month (from start of year up to end of this month)
+                totalMonthlyTaxSoFar = CalculateNDFL(taxableBeforeMonth, taxableBase, settings);
+
+                // Transactional NDFL is total monthly tax minus tax already paid in advances.
+                ndfl = Math.Max(0, totalMonthlyTaxSoFar - paidTaxOnAdvances);
             }
 
             // 6. Net Payout Calculation
             // For Advance: Net = Gross(Adv) - NDFL(Adv)
-            // For Final: Net = Gross(Total Month) - NDFL(Total Month) - Net(Paid in Advance)
+            // For Final: Net = Gross(Total Monthly) - TotalMonthlyTaxSoFar - Net(Paid in Advances)
             decimal netPayout = isAdvance
                 ? (grossSalary - ndfl)
-                : (grossSalary - totalMonthlyNDFL - advanceDeduction);
+                : (grossSalary - totalMonthlyTaxSoFar - advanceDeduction);
 
             decimal netSalary = Math.Max(0, netPayout);
             decimal debt = netPayout < 0 ? Math.Abs(netPayout) : 0;
