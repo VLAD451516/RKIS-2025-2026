@@ -51,19 +51,22 @@ namespace KovalevaSalaryCalculator.Models
         public DateTime Period { get; set; }
         public bool IsAdvance { get; set; }
 
-        // Input Snapshots
+        // Snapshots (Input values used at calculation time)
         public decimal BaseSalary { get; set; }
         public decimal Bonus { get; set; }
         public int WorkedDays { get; set; }
         public int NormDays { get; set; }
         public int ChildrenCount { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public decimal CurrentYearGrossBefore { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public decimal CurrentYearTaxableBaseBefore { get; set; }
 
-        // Settings Snapshots
         public decimal MROTSnapshot { get; set; }
 
-        // Calculation Results (Stored as data)
+        // Calculation Results
         public decimal ProportionalSalary { get; set; }
         public decimal GrossSalary { get; set; }
         public decimal TaxableBase { get; set; }

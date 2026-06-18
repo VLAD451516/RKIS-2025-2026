@@ -30,8 +30,9 @@ namespace KovalevaSalaryCalculator.Services
                 string json = File.ReadAllText(EmployeesFile);
                 return JsonSerializer.Deserialize<List<Employee>>(json) ?? new List<Employee>();
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"Ошибка загрузки сотрудников: {ex.Message}");
                 return new List<Employee>();
             }
         }
@@ -57,8 +58,9 @@ namespace KovalevaSalaryCalculator.Services
                 string json = File.ReadAllText(HistoryFile);
                 return JsonSerializer.Deserialize<List<SalaryCalculation>>(json) ?? new List<SalaryCalculation>();
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"Ошибка загрузки истории: {ex.Message}");
                 return new List<SalaryCalculation>();
             }
         }
@@ -82,10 +84,19 @@ namespace KovalevaSalaryCalculator.Services
             {
                 if (!File.Exists(SettingsFile)) return new AppSettings();
                 string json = File.ReadAllText(SettingsFile);
-                return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+                var settings = JsonSerializer.Deserialize<AppSettings>(json);
+
+                // Heal: Ensure tiers are present if loaded from old format
+                if (settings != null && (settings.NDFLTiers == null || settings.NDFLTiers.Count == 0))
+                {
+                    settings.NDFLTiers = new AppSettings().NDFLTiers;
+                }
+
+                return settings ?? new AppSettings();
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"Ошибка загрузки настроек: {ex.Message}");
                 return new AppSettings();
             }
         }

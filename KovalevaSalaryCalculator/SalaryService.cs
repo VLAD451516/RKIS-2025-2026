@@ -55,7 +55,7 @@ namespace KovalevaSalaryCalculator.Services
             else
             {
                 decimal childDeduction = 0;
-                // Limit check uses cumulative GROSS as per legislation
+                // Limit check uses cumulative GROSS
                 if (currentYearGrossBefore + grossSalary <= settings.MaxDeductionIncome)
                 {
                     for (int i = 1; i <= employee.ChildrenCount; i++)
@@ -68,7 +68,6 @@ namespace KovalevaSalaryCalculator.Services
             }
 
             // Progressive NDFL Calculation
-            // Using TaxableBase for progressive threshold
             decimal ndfl = CalculateNDFL(currentYearTaxableBaseBefore, taxableBase, settings);
 
             // Net Payout Calculation
@@ -80,7 +79,7 @@ namespace KovalevaSalaryCalculator.Services
             decimal insurance = 0;
             if (!isAdvance)
             {
-                decimal threshold = settings.MROT * 1.5m; // Updated for 2025 rule (1.5 * MROT)
+                decimal threshold = settings.MROT * 1.5m; // 2025 rule
                 if (grossSalary <= threshold)
                 {
                     insurance = Math.Round(grossSalary * 0.30m, 2);
@@ -95,6 +94,7 @@ namespace KovalevaSalaryCalculator.Services
 
             return new SalaryCalculation
             {
+                Id = Guid.NewGuid(), // Explicitly set ID
                 EmployeeId = employee.Id,
                 EmployeeName = employee.Name,
                 Period = period,
