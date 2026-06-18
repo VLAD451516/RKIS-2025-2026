@@ -171,13 +171,15 @@ namespace KovalevaSalaryCalculator
             int norm = ReadInt("Норма рабочих дней: ", 1, 31);
             int worked = ReadInt("Отработано дней: ", 0, norm);
 
-            // Cumulative income (Only Final records to avoid doubling)
+            // Chronological reference for threshold calculation
+            DateTime currentCalculationDate = isAdv ? new DateTime(year, month, 15) : new DateTime(year, month, 28);
+
             decimal currentYearGrossBefore = history
-                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == year && h.Period.Month < month && !h.IsAdvance)
+                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == year && h.Period < currentCalculationDate)
                 .Sum(h => h.GrossSalary);
 
             decimal currentYearTaxableBefore = history
-                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == year && h.Period.Month < month && !h.IsAdvance)
+                .Where(h => h.EmployeeId == emp.Id && h.Period.Year == year && h.Period < currentCalculationDate)
                 .Sum(h => h.TaxableBase);
 
             var calc = salaryService.CalculateSalary(emp, perf, worked, norm, period, isAdv, currentYearGrossBefore, currentYearTaxableBefore, settings, history);
@@ -258,9 +260,18 @@ namespace KovalevaSalaryCalculator
 
             var grouped = periodHistory.GroupBy(h => h.EmployeeId).Select(g => {
                 var final = g.FirstOrDefault(h => !h.IsAdvance);
-                return final != null
-                    ? new { Name = final.EmployeeName, Gross = final.GrossSalary, NDFL = final.NDFL, Ins = final.InsurancePremiums, Net = g.Sum(h => h.NetSalary) }
-                    : new { Name = g.First().EmployeeName, Gross = g.Sum(h => h.GrossSalary), NDFL = g.Sum(h => h.NDFL), Ins = 0m, Net = g.Sum(h => h.NetSalary) };
+                if (final != null)
+                {
+                    // Monthly final calculation includes total Gross and NDFL
+                    return new { Name = final.EmployeeName, Gross = final.GrossSalary, NDFL = final.NDFL, Ins = final.InsurancePremiums, Net = final.GrossSalary - final.NDFL };
+                }
+                else
+                {
+                    // Case when only advance exists for the month
+                    decimal totalGross = g.Sum(h => h.GrossSalary);
+                    decimal totalNDFL = g.Sum(h => h.NDFL);
+                    return new { Name = g.First().EmployeeName, Gross = totalGross, NDFL = totalNDFL, Ins = 0m, Net = totalGross - totalNDFL };
+                }
             }).ToList();
 
             Console.WriteLine($"\n--- Сводная ведомость за {month:D2}.{year} ---");
