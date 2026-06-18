@@ -68,38 +68,38 @@ namespace KovalevaSalaryCalculator.Services
             }
 
             // Progressive NDFL Calculation
-            // currentYearTaxableBaseBefore already includes advance of current month (if any)
-            // taxableBase is the taxable amount of THIS specific payment (if isAdvance)
-            // OR the TOTAL taxable amount of the month (if !isAdvance)
             decimal ndfl;
+            decimal totalMonthlyNDFL;
+
             if (isAdvance)
             {
                 ndfl = CalculateNDFL(currentYearTaxableBaseBefore, taxableBase, settings);
+                totalMonthlyNDFL = ndfl;
             }
             else
             {
-                // For final, we want to find the TOTAL tax for the month and subtract what was paid in advance
+                // currentYearTaxableBaseBefore for final calculation includes the advance taxable base
                 decimal advanceTaxable = history
                     .Where(h => h.EmployeeId == employee.Id && h.IsAdvance && h.Period.Year == period.Year && h.Period.Month == period.Month)
                     .Sum(h => h.TaxableBase);
+
                 decimal advanceNDFL = history
                     .Where(h => h.EmployeeId == employee.Id && h.IsAdvance && h.Period.Year == period.Year && h.Period.Month == period.Month)
                     .Sum(h => h.NDFL);
 
                 decimal yearToDateBeforeMonth = currentYearTaxableBaseBefore - advanceTaxable;
-                decimal totalMonthlyNDFL = CalculateNDFL(yearToDateBeforeMonth, taxableBase, settings);
+                totalMonthlyNDFL = CalculateNDFL(yearToDateBeforeMonth, taxableBase, settings);
+
+                // Transactional NDFL is the delta between total month tax and what was paid in advance
                 ndfl = Math.Max(0, totalMonthlyNDFL - advanceNDFL);
             }
 
             // Net Payout Calculation
-            // grossSalary for final is TOTAL monthly gross.
-            // We subtract total monthly NDFL (which is advance NDFL + current ndfl delta)
-            // and then subtract advance NET payout.
-            decimal totalMonthlyNDFLToSubtract = isAdvance ? ndfl : (history
-                .Where(h => h.EmployeeId == employee.Id && h.IsAdvance && h.Period.Year == period.Year && h.Period.Month == period.Month)
-                .Sum(h => h.NDFL) + ndfl);
-
-            decimal netPayout = grossSalary - totalMonthlyNDFLToSubtract - (isAdvance ? 0 : advanceDeduction);
+            // For Advance: Net = Gross(Adv) - NDFL(Adv)
+            // For Final: Net = Gross(Total) - NDFL(Total) - Net(Adv)
+            decimal netPayout = isAdvance
+                ? (grossSalary - ndfl)
+                : (grossSalary - totalMonthlyNDFL - advanceDeduction);
             decimal netSalary = Math.Max(0, netPayout);
             decimal debt = netPayout < 0 ? Math.Abs(netPayout) : 0;
 

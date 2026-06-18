@@ -246,8 +246,6 @@ namespace KovalevaSalaryCalculator
                         history.Remove(itemToRemove);
                         storageService.SaveHistory(history);
                         Console.WriteLine("Запись успешно удалена. Список обновлен.");
-                        Console.WriteLine("Нажмите любую клавишу...");
-                        Console.ReadKey();
                     }
                     if (!history.Any()) break;
                 }
@@ -356,7 +354,7 @@ namespace KovalevaSalaryCalculator
             while (true) {
                 Console.Write(prompt); string s = Console.ReadLine()?.Replace(",", ".") ?? "";
                 if (decimal.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal r) && r >= min) return r;
-                Console.WriteLine($"Ошибка! Введите число >= {min}.");
+                Console.WriteLine($"Ошибка! Введите положительное число (минимум {min}).");
             }
         }
 
