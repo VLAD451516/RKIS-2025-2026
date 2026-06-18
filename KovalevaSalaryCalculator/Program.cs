@@ -21,10 +21,18 @@ namespace KovalevaSalaryCalculator
         {
             Console.Title = "ИП Ковалева Т.С. - Расчет зарплаты 2025";
 
-            if (args.Length > 0 && args[0] == "--test")
+            if (args.Length > 0)
             {
-                ManualTests.Run();
-                return;
+                if (args[0] == "--test")
+                {
+                    ManualTests.Run();
+                    return;
+                }
+                if (args[0] == "--reset")
+                {
+                    ResetAllData();
+                    return;
+                }
             }
 
             // Migrating old files if they exist in root
@@ -92,6 +100,28 @@ namespace KovalevaSalaryCalculator
                 {
                     try { File.Move(f, Path.Combine("Data", f), true); } catch { }
                 }
+            }
+        }
+
+        static void ResetAllData()
+        {
+            Console.WriteLine("ВНИМАНИЕ! Вы собираетесь полностью удалить все данные (сотрудников, историю, настройки).");
+            Console.Write("Введите 'RESET' для подтверждения: ");
+            if (Console.ReadLine() == "RESET")
+            {
+                if (Directory.Exists("Data"))
+                {
+                    Directory.Delete("Data", true);
+                    Console.WriteLine("Все данные успешно удалены.");
+                }
+                else
+                {
+                    Console.WriteLine("Папка с данными не найдена.");
+                }
+            }
+            else
+            {
+                Console.WriteLine("Сброс отменен.");
             }
         }
 
@@ -380,9 +410,9 @@ namespace KovalevaSalaryCalculator
             {
                 Console.Write(prompt);
                 string s = Console.ReadLine()?.Replace(",", ".") ?? "";
-                if (string.IsNullOrWhiteSpace(s)) return null;
+                if (string.IsNullOrWhiteSpace(s)) return null; // Friendly: Just press Enter to keep current
                 if (decimal.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal r) && r >= min && r <= max) return r;
-                Console.WriteLine($"Ошибка! Введите число от {min} до {max} или оставьте пустым (Enter).");
+                Console.WriteLine($"Ошибка! Пожалуйста, введите корректное число от {min} до {max} или просто нажмите Enter для пропуска.");
             }
         }
 
