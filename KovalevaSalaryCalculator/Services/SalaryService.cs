@@ -18,122 +18,142 @@ namespace KovalevaSalaryCalculator.Services
             int normDays,
             DateTime period,
             bool isAdvance,
-            decimal currentYearGrossBefore,
-            decimal currentYearTaxableBaseBefore,
             AppSettings settings,
             List<SalaryCalculation> history)
         {
-            // 1. Calculate proportional part of the base salary based on worked days
-            decimal proportionalSalary = normDays > 0 ? Math.Round(employee.BaseSalary / normDays * workedDays, 2) : 0;
-            decimal bonus = 0;
-            decimal advanceDeduction = 0;
+            // --- Validation ---
+            if (normDays <= 0) throw new ArgumentException("Норма рабочих дней должна быть больше 0.");
+            if (workedDays < 0) throw new ArgumentException("Количество отработанных дней не может быть отрицательным.");
+            if (workedDays > normDays) throw new ArgumentException("Количество отработанных дней не может превышать норму.");
 
-            // 2. Performance-based bonuses (only for final monthly settlement)
+            // --- 1. Cumulative Calculation Logic (Optimized) ---
+            // We need sums of gross and taxable base from history for the current year.
+            // Rule: Sum 'Final' settlements for all PREVIOUS months + all 'Advances' of CURRENT month.
+
+            decimal grossBefore = 0;
+            decimal taxableBefore = 0;
+            decimal advanceNetPaidThisMonth = 0;
+            decimal advanceNDFLPaidThisMonth = 0;
+            decimal advanceTaxablePaidThisMonth = 0;
+
+            foreach (var h in history)
+            {
+                if (h.EmployeeId != employee.Id || h.Period.Year != period.Year) continue;
+
+                if (h.Period.Month < period.Month)
+                {
+                    if (!h.IsAdvance) // Only final monthly records count towards the cumulative year-to-date total
+                    {
+                        grossBefore += h.GrossSalary;
+                        taxableBefore += h.TaxableBase;
+                    }
+                }
+                else if (h.Period.Month == period.Month && h.IsAdvance)
+                {
+                    // For the current month, we track advances to subtract them later
+                    advanceNetPaidThisMonth += h.NetSalary;
+                    advanceNDFLPaidThisMonth += h.NDFL;
+                    advanceTaxablePaidThisMonth += h.TaxableBase;
+
+                    // If we are currently calculating another advance, previous advances of this month also count as "Before"
+                    if (isAdvance)
+                    {
+                        grossBefore += h.GrossSalary;
+                        taxableBefore += h.TaxableBase;
+                    }
+                }
+            }
+
+            // If we are calculating FINAL monthly settlement, "Before" must include this month's advances
+            if (!isAdvance)
+            {
+                grossBefore += advanceTaxablePaidThisMonth; // taxable == gross for advances
+                taxableBefore += advanceTaxablePaidThisMonth;
+            }
+
+            // --- 2. Current Transaction Calculation ---
+
+            decimal proportionalSalary = Math.Round(employee.BaseSalary / normDays * workedDays, 2);
+            decimal bonus = 0;
+
             if (!isAdvance)
             {
                 switch (employee.Type)
                 {
                     case PositionType.Retail:
-                        // 2% of sales
                         bonus = Math.Round(performanceValue * 0.02m, 2);
                         break;
                     case PositionType.Logistics:
-                        // 50 RUB per load handled
                         bonus = performanceValue * 50m;
                         break;
                     case PositionType.Admin:
-                        // Fixed discretionary bonus
                         bonus = performanceValue;
                         break;
                 }
-
-                // Sum all net payments made as advances in the current month to subtract from final payout
-                advanceDeduction = history
-                    .Where(h => h.EmployeeId == employee.Id && h.IsAdvance && h.Period.Year == period.Year && h.Period.Month == period.Month)
-                    .Sum(h => h.NetSalary);
             }
 
-            // 3. Gross Calculation
-            // Advance is typically just a part of the proportional salary.
-            // Final settlement includes the full proportional salary + bonuses.
             decimal grossSalary = Math.Round(proportionalSalary + (isAdvance ? 0 : bonus), 2);
 
-            // 4. Taxable Base Calculation
+            // --- 3. Taxable Base & Deductions ---
             decimal taxableBase;
             if (isAdvance)
             {
-                // Advances don't usually apply child deductions until the final monthly settlement
-                taxableBase = grossSalary;
+                taxableBase = grossSalary; // No deductions on advances
             }
             else
             {
                 decimal childDeduction = 0;
-                // Child deduction logic (2025 rules):
-                // Limits apply to cumulative GROSS income since start of the year.
-                if (currentYearGrossBefore <= settings.MaxDeductionIncome)
+                if (grossBefore <= settings.MaxDeductionIncome)
                 {
                     for (int i = 1; i <= employee.ChildrenCount; i++)
                     {
-                        if (i == 1 || i == 2) childDeduction += 2800m; // 2800 RUB for 1st and 2nd child
-                        else childDeduction += 6000m; // 6000 RUB for 3rd and subsequent children
+                        if (i == 1 || i == 2) childDeduction += 2800m;
+                        else childDeduction += 6000m;
                     }
                 }
                 taxableBase = Math.Max(0, grossSalary - childDeduction);
             }
 
-            // 5. Progressive NDFL Calculation
-            // Thresholds: 2.4M, 5M, 20M, 50M RUB cumulative taxable income.
-            // currentYearTaxableBaseBefore already includes all previous payments (Finals of prev months + Advances of current month)
-
+            // --- 4. Progressive NDFL ---
             decimal ndfl;
-            decimal totalMonthlyTaxSoFar;
+            decimal totalMonthlyTax;
 
             if (isAdvance)
             {
-                // Calculate tax for this specific advance based on what was already earned this year.
-                ndfl = CalculateNDFL(currentYearTaxableBaseBefore, taxableBase, settings);
-                totalMonthlyTaxSoFar = ndfl;
+                ndfl = CalculateNDFL(taxableBefore, taxableBase, settings);
+                totalMonthlyTax = ndfl;
             }
             else
             {
-                // Calculating FINAL Monthly Settlement.
-                // currentYearTaxableBaseBefore passed from Program.cs includes previous months AND current month's advances.
-                // taxableBase is the TOTAL taxable income for the current month (Gross - Child Deductions).
+                // taxableBefore at this point includes advances of the current month.
+                // We want to calculate the total tax for the entire month's income (relative to year start).
+                decimal taxableBeforeCurrentMonth = taxableBefore - advanceTaxablePaidThisMonth;
+                totalMonthlyTax = CalculateNDFL(taxableBeforeCurrentMonth, taxableBase, settings);
 
-                // We need to know how much tax (and taxable base) was ALREADY paid in current month advances.
-                var currentMonthAdvances = history
-                    .Where(h => h.EmployeeId == employee.Id && h.IsAdvance && h.Period.Year == period.Year && h.Period.Month == period.Month)
-                    .ToList();
-
-                decimal paidTaxOnAdvances = currentMonthAdvances.Sum(h => h.NDFL);
-                decimal paidTaxableOnAdvances = currentMonthAdvances.Sum(h => h.TaxableBase);
-
-                // Start calculation from the beginning of the month (excluding current month's advances).
-                decimal taxableBeforeMonth = currentYearTaxableBaseBefore - paidTaxableOnAdvances;
-
-                // Calculate total tax for the month (from start of year up to end of this month)
-                totalMonthlyTaxSoFar = CalculateNDFL(taxableBeforeMonth, taxableBase, settings);
-
-                // Transactional NDFL is total monthly tax minus tax already paid in advances.
-                ndfl = Math.Max(0, totalMonthlyTaxSoFar - paidTaxOnAdvances);
+                // Transactional NDFL is the delta.
+                ndfl = Math.Max(0, totalMonthlyTax - advanceNDFLPaidThisMonth);
             }
 
-            // 6. Net Payout Calculation
-            // For Advance: Net = Gross(Adv) - NDFL(Adv)
-            // For Final: Net = Gross(Total Monthly) - TotalMonthlyTaxSoFar - Net(Paid in Advances)
-            decimal netPayout = isAdvance
-                ? (grossSalary - ndfl)
-                : (grossSalary - totalMonthlyTaxSoFar - advanceDeduction);
+            // --- 5. Net Payout Logic (Hardened) ---
+            // For Advance: Net = Gross - NDFL
+            // For Final: Net = TotalMonthGross - TotalMonthNDFL - TotalMonthAdvancesNet
+            decimal netPayout;
+            if (isAdvance)
+            {
+                netPayout = grossSalary - ndfl;
+            }
+            else
+            {
+                netPayout = grossSalary - totalMonthlyTax - advanceNetPaidThisMonth;
+            }
 
             decimal netSalary = Math.Max(0, netPayout);
             decimal debt = netPayout < 0 ? Math.Abs(netPayout) : 0;
 
-            // 7. Employer Insurance Premiums (SME/MSP rates)
+            // --- 6. Insurance Premiums ---
             decimal insurance = 0;
             if (!isAdvance)
             {
-                // SME threshold is 1 MROT (22,440 RUB in 2025)
-                // Below MROT: 30%, Above MROT: 15%
                 decimal threshold = settings.MROT;
                 if (grossSalary <= threshold)
                 {
@@ -147,7 +167,6 @@ namespace KovalevaSalaryCalculator.Services
                 }
             }
 
-            // 8. Resulting Snapshot
             return new SalaryCalculation
             {
                 Id = Guid.NewGuid(),
@@ -160,23 +179,20 @@ namespace KovalevaSalaryCalculator.Services
                 WorkedDays = workedDays,
                 NormDays = normDays,
                 ChildrenCount = employee.ChildrenCount,
-                CurrentYearGrossBefore = currentYearGrossBefore,
-                CurrentYearTaxableBaseBefore = currentYearTaxableBaseBefore,
+                CurrentYearGrossBefore = grossBefore,
+                CurrentYearTaxableBaseBefore = taxableBefore,
                 MROTSnapshot = settings.MROT,
                 ProportionalSalary = proportionalSalary,
                 GrossSalary = grossSalary,
                 TaxableBase = taxableBase,
                 NDFL = ndfl,
-                AdvanceDeduction = advanceDeduction,
+                AdvanceDeduction = isAdvance ? 0 : advanceNetPaidThisMonth,
                 NetSalary = netSalary,
                 EmployeeDebt = debt,
                 InsurancePremiums = insurance
             };
         }
 
-        /// <summary>
-        /// Calculates tax across the progressive scale tiers.
-        /// </summary>
         private decimal CalculateNDFL(decimal prevTaxableTotal, decimal currentTaxableAmount, AppSettings settings)
         {
             decimal totalTax = 0;
@@ -199,7 +215,6 @@ namespace KovalevaSalaryCalculator.Services
                 }
             }
 
-            // Standard mathematical rounding for tax as per Russian legislation
             return Math.Round(totalTax, 0, MidpointRounding.AwayFromZero);
         }
     }

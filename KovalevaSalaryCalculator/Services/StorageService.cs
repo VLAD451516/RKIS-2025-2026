@@ -34,7 +34,15 @@ namespace KovalevaSalaryCalculator.Services
             {
                 if (!File.Exists(EmployeesFile)) return new List<Employee>();
                 string json = File.ReadAllText(EmployeesFile);
-                return JsonSerializer.Deserialize<List<Employee>>(json) ?? new List<Employee>();
+                var employees = JsonSerializer.Deserialize<List<Employee>>(json) ?? new List<Employee>();
+
+                // Heal: Ensure all employees have a valid ID
+                foreach (var emp in employees)
+                {
+                    if (emp.Id == Guid.Empty) emp.Id = Guid.NewGuid();
+                }
+
+                return employees;
             }
             catch (Exception ex)
             {
@@ -70,6 +78,7 @@ namespace KovalevaSalaryCalculator.Services
                     foreach (var h in history)
                     {
                         if (h.Id == Guid.Empty) h.Id = Guid.NewGuid();
+                        if (h.EmployeeId == Guid.Empty) h.EmployeeId = Guid.NewGuid(); // Fallback for very old data
                     }
                 }
 

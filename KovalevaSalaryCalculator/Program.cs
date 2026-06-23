@@ -85,7 +85,7 @@ namespace KovalevaSalaryCalculator
         static void PrintHeader()
         {
             Console.WriteLine("================================================================");
-            Console.WriteLine("ИП Ковалева Татьяна Сергеевна (Версия 9.1 FINAL)");
+            Console.WriteLine("ИП Ковалева Татьяна Сергеевна (Версия 9.5 PRO)");
             Console.WriteLine("ОКВЭД: 47.11 | 52.24.2 | 52.29");
             Console.WriteLine($"МРОТ: {settings.MROT:N2} | Лимит вычета: {settings.MaxDeductionIncome:N2}");
             Console.WriteLine("================================================================");
@@ -220,19 +220,23 @@ namespace KovalevaSalaryCalculator
             int norm = ReadInt("Норма рабочих дней: ", 1, 31);
             int worked = ReadInt("Отработано дней: ", 0, norm);
 
-            // Calculation cumulative values
-            var (grossBefore, taxableBefore) = GetCumulativeTotals(emp.Id, year, month, isAdv);
-
-            var calc = salaryService.CalculateSalary(emp, perf, worked, norm, period, isAdv, grossBefore, taxableBefore, settings, history);
-
-            if (calc.EmployeeDebt > 0)
+            try
             {
-                Console.WriteLine($"\n[ВНИМАНИЕ] Аванс превысил начисления! Долг сотрудника: {calc.EmployeeDebt:N2}");
-            }
+                var calc = salaryService.CalculateSalary(emp, perf, worked, norm, period, isAdv, settings, history);
 
-            history.Add(calc);
-            storageService.SaveHistory(history);
-            PrintSalarySlip(calc);
+                if (calc.EmployeeDebt > 0)
+                {
+                    Console.WriteLine($"\n[ВНИМАНИЕ] Аванс превысил начисления! Долг сотрудника: {calc.EmployeeDebt:N2}");
+                }
+
+                history.Add(calc);
+                storageService.SaveHistory(history);
+                PrintSalarySlip(calc);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\nОшибка расчета: {ex.Message}");
+            }
         }
 
         static void ManageSettings()
@@ -377,43 +381,6 @@ namespace KovalevaSalaryCalculator
             employees.RemoveAt(idx);
             storageService.SaveEmployees(employees);
             Console.WriteLine("Сотрудник удален.");
-        }
-
-        /// <summary>
-        /// Calculates cumulative totals for an employee from the start of the year up to the current calculation point.
-        /// </summary>
-        static (decimal gross, decimal taxable) GetCumulativeTotals(Guid empId, int year, int month, bool isCurrentCalcAdvance)
-        {
-            // Rule 1: Sum 'Final' settlements for all PREVIOUS months of the year.
-            var prevMonthsFinals = history.Where(h => h.EmployeeId == empId && h.Period.Year == year && h.Period.Month < month && !h.IsAdvance);
-
-            // Rule 2: Sum all 'Advance' payments for the CURRENT month that were already calculated.
-            var currentMonthAdvances = history.Where(h => h.EmployeeId == empId && h.Period.Year == year && h.Period.Month == month && h.IsAdvance);
-
-            decimal gross = prevMonthsFinals.Sum(h => h.GrossSalary);
-            decimal taxable = prevMonthsFinals.Sum(h => h.TaxableBase);
-
-            // Both Advances and Final calculations for the same month need to see the cumulative total
-            // of previous months' Final settlements.
-            // BUT: The Final calculation MUST also see the CURRENT month's Advances.
-            // AND: If there are multiple advances (rare but possible), subsequent advances should see previous ones?
-            // Actually, usually there is only 1 advance and 1 final.
-
-            if (!isCurrentCalcAdvance)
-            {
-                // If we are calculating FINAL, we must include all advances of this month in the "Before" total
-                // so the SalaryService knows how much was already taxed.
-                gross += currentMonthAdvances.Sum(h => h.GrossSalary);
-                taxable += currentMonthAdvances.Sum(h => h.TaxableBase);
-            }
-            else
-            {
-                // If we are calculating an ADVANCE, and somehow there are already advances, sum them.
-                gross += currentMonthAdvances.Sum(h => h.GrossSalary);
-                taxable += currentMonthAdvances.Sum(h => h.TaxableBase);
-            }
-
-            return (gross, taxable);
         }
 
         static string ReadString(string prompt) {
